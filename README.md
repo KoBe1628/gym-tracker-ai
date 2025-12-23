@@ -30,7 +30,7 @@ A smart fitness companion built with **React Native** and **Supabase** that trac
 
 1.  Clone the repo:
     ```bash
-    git clone [https://github.com/YOUR_USERNAME/gym-tracker-ai.git](https://github.com/YOUR_USERNAME/gym-tracker-ai.git)
+    git clone [https://github.com/KoBe1628/gym-tracker-ai.git](https://github.com/KoBe1628/gym-tracker-ai.git)
     ```
 2.  Install dependencies:
     ```bash
