@@ -22,12 +22,6 @@ https://github.com/user-attachments/assets/ed34540c-bf24-4428-89e6-64ab5b0062e5
 - **Database Security:** Row Level Security (RLS) policies ensuring complete user data privacy.
 - **Visualization:** `react-native-svg` (Custom implementation), `react-native-calendars`.
 
-## 📸 Screenshots
-
-|      Routine Builder       |     Strength Analytics     |       Muscle Heatmap       |
-| :------------------------: | :------------------------: | :------------------------: |
-| _(Drag Screenshot 1 Here)_ | _(Drag Screenshot 2 Here)_ | _(Drag Screenshot 3 Here)_ |
-
 ## 🏗️ How to Run
 
 1.  Clone the repo:
