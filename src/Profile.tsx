@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import { supabase } from "./lib/supabase";
 import { Calendar } from "react-native-calendars"; // 🗓️ The new library
+import BadgeGrid from "./BadgeGrid";
+import { feedback } from "./lib/haptics";
 
 const THEME = {
   bg: "#121212",
@@ -27,6 +29,11 @@ export default function Profile() {
   const [workoutCount, setWorkoutCount] = useState(0);
   const [joinDate, setJoinDate] = useState("");
   const [markedDates, setMarkedDates] = useState<any>({}); // 🗓️ Holds our colored days
+  const [badgeStats, setBadgeStats] = useState({
+    count: 0,
+    maxWeight: 0,
+    hasWeekendWorkout: false,
+  });
 
   useEffect(() => {
     getProfile();
@@ -52,32 +59,56 @@ export default function Profile() {
         setJoinDate(new Date(profile.created_at).toLocaleDateString());
       }
 
-      // 🗓️ FIX: Changed 'created_at' to 'started_at'
+      // 1. Fetch Workouts (Existing code)
       const {
         data: workouts,
         count,
         error,
       } = await supabase
         .from("workouts")
-        .select("started_at", { count: "exact" }) // <--- MATCHES YOUR DB NOW
+        .select("started_at", { count: "exact" })
         .eq("user_id", user.id);
-
-      if (error) console.log("Workout Fetch Error:", error.message); // Debugging help
 
       setWorkoutCount(count || 0);
 
-      // 🗓️ FIX: Use 'started_at' for the calendar logic too
+      // 2. 🗓️ Calendar Logic (Existing code)
       const dates: any = {};
+      let hasWeekend = false; // 🆕 Track for badge
+
       workouts?.forEach((w) => {
-        const dateStr = w.started_at.split("T")[0]; // <--- CHANGED HERE TOO
+        const dateStr = w.started_at.split("T")[0];
         dates[dateStr] = {
           selected: true,
           selectedColor: THEME.primary,
           marked: true,
           dotColor: "black",
         };
+
+        // Check if it was a Saturday (6) or Sunday (0)
+        const day = new Date(w.started_at).getDay();
+        if (day === 0 || day === 6) hasWeekend = true;
       });
       setMarkedDates(dates);
+
+      // 3. 🏋️‍♂️ New: Fetch Max Weight for Badges
+      // We look for the heaviest lift in the logs
+      const { data: maxLog } = await supabase
+        .from("workout_logs")
+        .select("weight_kg")
+        .eq("workouts.user_id", user.id) // Inner join trick
+        .select("weight_kg, workouts!inner(user_id)") // Filter by user
+        .order("weight_kg", { ascending: false })
+        .limit(1)
+        .single();
+
+      const maxWeight = maxLog ? maxLog.weight_kg : 0;
+
+      // 4. Set Stats for the Badge Component
+      setBadgeStats({
+        count: count || 0,
+        maxWeight: maxWeight,
+        hasWeekendWorkout: hasWeekend,
+      });
     } catch (error) {
       Alert.alert("Error", "Could not load profile");
     } finally {
@@ -86,6 +117,7 @@ export default function Profile() {
   }
 
   async function toggleLevel() {
+    feedback.medium(); // 📳 THUD
     const newLevel = level === "Beginner" ? "Intermediate" : "Beginner";
     setLevel(newLevel);
 
@@ -135,6 +167,8 @@ export default function Profile() {
             <Text style={styles.statLabel}>STATUS</Text>
           </View>
         </View>
+
+        <BadgeGrid stats={badgeStats} />
 
         {/* 🗓️ CALENDAR SECTION */}
         <Text style={styles.sectionTitle}>CONSISTENCY</Text>

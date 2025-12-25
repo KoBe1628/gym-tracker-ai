@@ -17,6 +17,8 @@ import { Ionicons } from "@expo/vector-icons";
 import MuscleHeatmap from "./MuscleHeatmap";
 import RoutineList from "./RoutineList";
 import ProgressChart from "./ProgressChart";
+import RestTimer from "./RestTimer";
+import { feedback } from "./lib/haptics";
 
 type Exercise = {
   id: number;
@@ -47,6 +49,7 @@ export default function ExerciseList() {
   const [activeRoutineId, setActiveRoutineId] = useState<number | null>(null);
   const [activeRoutineName, setActiveRoutineName] = useState<string>("");
   const [originalExercises, setOriginalExercises] = useState<Exercise[]>([]); // Backup of the full list
+  const [showTimer, setShowTimer] = useState(false);
 
   useEffect(() => {
     fetchExercises();
@@ -159,10 +162,12 @@ export default function ExerciseList() {
 
     if (error) Alert.alert("Error", error.message);
     else {
+      feedback.light(); // 📳 SATISFYING CLICK
       setModalVisible(false);
+      setShowTimer(true);
       setWeight("");
       setReps("");
-      // Optional: Refresh heatmap here if you want instant updates
+      // Optional: Refresh heatmap here if we want instant updates
     }
   }
 
@@ -373,6 +378,10 @@ export default function ExerciseList() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {showTimer && (
+        <RestTimer initialSeconds={90} onClose={() => setShowTimer(false)} />
+      )}
     </View>
   );
 }
