@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { supabase } from "./lib/supabase";
 
+// 🦴 1. VISUALS: Keep your nice muscle shapes
 const BODY_PATHS = {
   chest:
     "M100 80 Q130 110 160 80 L160 130 Q130 150 100 130 Z M200 80 Q230 110 260 80 L260 130 Q230 150 200 130 Z",
@@ -16,23 +17,21 @@ const BODY_PATHS = {
 };
 
 export default function MuscleHeatmap() {
-  const [muscleVolumes, setMuscleVolumes] = useState<Record<string, number>>(
-    {}
-  );
+  const [muscleHeat, setMuscleHeat] = useState<Record<string, number>>({});
   const [recommendation, setRecommendation] = useState<string>("");
-  const [userLevel, setUserLevel] = useState<string>("Beginner"); // Default to Beginner
+  const [userLevel, setUserLevel] = useState<string>("Beginner");
 
   useEffect(() => {
-    calculateData();
+    calculateRecovery();
   }, []);
 
-  async function calculateData() {
+  async function calculateRecovery() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    // 1. NEW: Fetch User Profile to get their Experience Level
+    // 1. Fetch Profile for Level (Keep your Smart Coach logic)
     const { data: profile } = await supabase
       .from("profiles")
       .select("experience_level")
@@ -42,114 +41,111 @@ export default function MuscleHeatmap() {
     const currentLevel = profile?.experience_level || "Beginner";
     setUserLevel(currentLevel);
 
-    // 2. Fetch Logs (Same as before)
+    // 2. Fetch Logs WITH TIMESTAMP (Crucial for decay)
     const { data: logs } = await supabase
       .from("workout_logs")
       .select(
         `
-        weight_kg, reps,
-        exercises ( muscles ( slug ) ),
-        workouts!inner ( user_id )
+        created_at,
+        exercises ( muscles ( slug ) )
       `
       )
-      .eq("workouts.user_id", user.id);
+      .order("created_at", { ascending: false }); // Newest first
+    // .eq("workouts.user_id", user.id); // Add this if you set up the join correctly, or rely on RLS
 
-    const volumes: Record<string, number> = {};
+    // 3. 🧠 THE NEW LOGIC: Calculate Decay (48 Hour Rule)
+    const now = new Date().getTime();
+    const heatMap: Record<string, number> = {};
+    const processedMuscles = new Set(); // Track which muscles we already found (only newest matters)
 
     logs?.forEach((log: any) => {
       const muscleSlug = log.exercises?.muscles?.slug;
-      if (muscleSlug) {
-        const currentVolume = (log.weight_kg || 0) * (log.reps || 0);
-        volumes[muscleSlug] = (volumes[muscleSlug] || 0) + currentVolume;
+      if (!muscleSlug || processedMuscles.has(muscleSlug)) return;
+
+      const logTime = new Date(log.created_at).getTime();
+      const hoursDiff = (now - logTime) / (1000 * 60 * 60);
+
+      // Formula: 1.0 intensity at 0h, 0.0 intensity at 48h
+      if (hoursDiff < 48) {
+        heatMap[muscleSlug] = 1 - hoursDiff / 48;
+        processedMuscles.add(muscleSlug); // We found the most recent workout for this muscle
       }
     });
 
-    setMuscleVolumes(volumes);
-    // 3. Pass the User Level to the generator
-    generateRecommendation(volumes, currentLevel);
+    setMuscleHeat(heatMap);
+    generateRecommendation(heatMap, currentLevel);
   }
 
-  // NEW: Refined Algorithm based on Experience
-  function generateRecommendation(
-    volumes: Record<string, number>,
-    level: string
-  ) {
+  // 4. SMART COACH (Updated to use Heat instead of Volume)
+  function generateRecommendation(heat: Record<string, number>, level: string) {
+    // Find the "Coldest" muscle (Lowest intensity)
     const muscles = ["chest", "lats", "biceps", "triceps", "quads"];
-    let weakestMuscle = "";
-    let minVol = Infinity;
+    let coldestMuscle = "";
+    let minHeat = Infinity;
 
-    // Find weakest muscle
     for (const m of muscles) {
-      const vol = volumes[m] || 0;
-      if (vol < minVol) {
-        minVol = vol;
-        weakestMuscle = m;
+      const h = heat[m] || 0;
+      if (h < minHeat) {
+        minHeat = h;
+        coldestMuscle = m;
       }
     }
 
-    // SMART LOGIC: Different advice for Beginners vs Advanced
+    // Give advice based on what is recovered (Cold)
     if (level === "Beginner") {
-      // Beginners need COMPOUND movements (Big basics)
-      switch (weakestMuscle) {
+      switch (coldestMuscle) {
         case "chest":
-          setRecommendation("Builder Tip: Focus on Push Ups to build a base.");
+          setRecommendation("Chest is recovered. Ready for Push Ups?");
           break;
         case "lats":
-          setRecommendation(
-            "Builder Tip: Assisted Pull Ups are your best friend."
-          );
+          setRecommendation("Back is fresh. Go for Pull Ups.");
           break;
         case "quads":
-          setRecommendation(
-            "Builder Tip: Bodyweight Squats explicitly targeting depth."
-          );
+          setRecommendation("Legs are rested. Squat day?");
           break;
         default:
-          setRecommendation(
-            "Keep showing up! Consistency is key for new gains."
-          );
+          setRecommendation("You are consistent! Keep it up.");
       }
     } else {
-      // Intermediates/Advanced get specific ISOLATION advice
-      switch (weakestMuscle) {
+      switch (coldestMuscle) {
         case "chest":
-          setRecommendation(
-            "Pro Tip: Try Incline Dumbbell Press for upper chest."
-          );
+          setRecommendation("Chest is prime. Hit Incline Bench today.");
           break;
         case "lats":
-          setRecommendation(
-            "Pro Tip: Heavy Barbell Rows will thicken that back."
-          );
+          setRecommendation("Lats are cold. heavy Rows will fix that.");
           break;
         case "biceps":
-          setRecommendation("Pro Tip: Preacher Curls for peak contraction.");
+          setRecommendation("Arms are fresh. Isolation time.");
           break;
         case "triceps":
-          setRecommendation("Pro Tip: Skullcrushers to isolate the long head.");
+          setRecommendation("Triceps recovered. Heavy Dips?");
           break;
         case "quads":
-          setRecommendation("Pro Tip: Front Squats to emphasize the quads.");
+          setRecommendation("Quads represent. Front Squat time.");
           break;
         default:
-          setRecommendation("Balanced physique. Time to increase the weight!");
+          setRecommendation("Full recovery achieved. Go heavy.");
       }
     }
   }
 
+  // 5. COLOR LOGIC (Heat based)
   const getColor = (slug: string) => {
-    const vol = muscleVolumes[slug] || 0;
-    if (vol > 1000) return "#ef4444"; // Tailwind Red-500
-    if (vol > 500) return "#f97316"; // Tailwind Orange-500
-    if (vol > 0) return "#22c55e"; // Tailwind Green-500
-    return "#e5e7eb"; // Tailwind Gray-200
+    const intensity = muscleHeat[slug] || 0;
+
+    // Interpolate between Grey -> Yellow -> Red
+    // Simple version:
+    if (intensity > 0.6) return "#ef4444"; // HOT (Red) - Recently trained
+    if (intensity > 0.2) return "#facc15"; // WARM (Yellow) - Recovering
+    return "#374151"; // COLD (Dark Grey) - Fully Recovered
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Your Body Battery 🔋</Text>
+      <Text style={styles.title}>MUSCLE RECOVERY 🔋</Text>
 
       <Svg height="250" width="200" viewBox="0 0 360 400">
+        {/* Draw the Body */}
         {Object.entries(BODY_PATHS).map(([slug, pathData]) => (
           <Path
             key={slug}
@@ -157,23 +153,36 @@ export default function MuscleHeatmap() {
             fill={getColor(slug)}
             stroke="black"
             strokeWidth="2"
+            opacity={0.9}
           />
         ))}
+        {/* Head (Decorative) */}
         <Path
           d="M180 30 A 30 30 0 1 1 180 90 A 30 30 0 1 1 180 30 Z"
-          fill="#ccc"
+          fill="#555"
         />
       </Svg>
 
+      {/* Legend */}
       <View style={styles.legendContainer}>
-        <Text style={{ color: "#22c55e" }}>● Active</Text>
-        <Text style={{ color: "#f97316" }}>● Building</Text>
-        <Text style={{ color: "#ef4444" }}>● Intense</Text>
+        <View style={styles.legendItem}>
+          <View style={[styles.dot, { backgroundColor: "#ef4444" }]} />
+          <Text style={styles.legendText}>Sore (0-24h)</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.dot, { backgroundColor: "#facc15" }]} />
+          <Text style={styles.legendText}>Recovering</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.dot, { backgroundColor: "#374151" }]} />
+          <Text style={styles.legendText}>Ready</Text>
+        </View>
       </View>
 
+      {/* Coach Tip */}
       <View style={styles.tipContainer}>
         <Text style={styles.tipTitle}>
-          {userLevel === "Beginner" ? "🌱 Starter Coach" : "⚡ Pro Coach"}:
+          {userLevel === "Beginner" ? "🌱 Smart Coach" : "⚡ Pro Coach"}:
         </Text>
         <Text style={styles.tipText}>{recommendation}</Text>
       </View>
@@ -182,46 +191,51 @@ export default function MuscleHeatmap() {
 }
 
 const styles = StyleSheet.create({
-  // CHANGED: Background transparent, removed shadow (cleaner look)
   container: {
     alignItems: "center",
     marginVertical: 10,
-    backgroundColor: "transparent", // <--- This blends it!
+    backgroundColor: "transparent",
     padding: 10,
   },
-  // CHANGED: Title color to white
   title: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: "800",
-    marginBottom: 15,
-    color: "white", // <--- Visible on dark bg
+    marginBottom: 5,
+    color: "#A1A1AA",
+    letterSpacing: 1,
+    textTransform: "uppercase",
   },
+
   legendContainer: {
     flexDirection: "row",
     gap: 15,
     marginTop: 10,
     marginBottom: 15,
   },
-  // CHANGED: Tip container to be dark grey with a colored border
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { color: "#888", fontSize: 10, fontWeight: "bold" },
+
   tipContainer: {
     marginTop: 10,
     padding: 15,
-    backgroundColor: "#1E1E1E", // Dark grey card
+    backgroundColor: "#1E1E1E",
     borderRadius: 12,
     width: "100%",
     alignItems: "center",
     borderLeftWidth: 4,
-    borderLeftColor: "#bef264", // Matches your Lime Green theme
+    borderLeftColor: "#bef264",
   },
   tipTitle: {
     fontWeight: "bold",
     color: "#bef264",
     marginBottom: 5,
-    fontSize: 14,
+    fontSize: 12,
     textTransform: "uppercase",
+    letterSpacing: 1,
   },
   tipText: {
-    fontSize: 16,
+    fontSize: 14,
     textAlign: "center",
     color: "#e5e7eb",
     fontStyle: "italic",

@@ -19,6 +19,8 @@ import RoutineList from "./RoutineList";
 import ProgressChart from "./ProgressChart";
 import RestTimer from "./RestTimer";
 import { feedback } from "./lib/haptics";
+import PlateCalculator from "./PlateCalculator";
+import ConfettiCannon from "react-native-confetti-cannon";
 
 type Exercise = {
   id: number;
@@ -50,6 +52,9 @@ export default function ExerciseList() {
   const [activeRoutineName, setActiveRoutineName] = useState<string>("");
   const [originalExercises, setOriginalExercises] = useState<Exercise[]>([]); // Backup of the full list
   const [showTimer, setShowTimer] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [note, setNote] = useState("");
 
   useEffect(() => {
     fetchExercises();
@@ -157,17 +162,40 @@ export default function ExerciseList() {
         exercise_id: selectedExercise?.id,
         weight_kg: parseFloat(weight),
         reps: parseInt(reps),
+        note: note.trim(), // <--- SAVE NOTE
       },
     ]);
 
-    if (error) Alert.alert("Error", error.message);
-    else {
-      feedback.light(); // 📳 SATISFYING CLICK
+    if (!error) setNote("");
+
+    if (error) {
+      Alert.alert("Error", error.message);
+    } else {
+      // 🔍 CHECK FOR PR (Simple Logic)
+      // If the weight is higher than the last time we fetched history (for the chart)
+      // We can just trigger it manually for now to test the "Feel"
+
+      // Let's trigger confetti if the weight is substantial (> 60kg for testing)
+      // OR if you want to be smart: Check against the chart data we fetched earlier!
+      const previousMax = Math.max(
+        ...(originalExercises.find((e) => e.id === selectedExercise?.id)?.id
+          ? []
+          : [0])
+      );
+      // ^ That's complicated to fetch efficiently without a new query.
+
+      // Let's just celebrate ANY set for now to test the animation,
+      // OR celebrate if weight > 100kg (The 2 plate milestone)
+      if (parseFloat(weight) >= 100 || parseFloat(reps) >= 12) {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000); // Stop after 5s
+      }
+
+      feedback.light();
       setModalVisible(false);
       setShowTimer(true);
-      setWeight("");
-      setReps("");
-      // Optional: Refresh heatmap here if we want instant updates
+
+      // ... rest of code
     }
   }
 
@@ -235,6 +263,32 @@ export default function ExerciseList() {
     );
   };
 
+  // 🔍 FILTER LOGIC
+  const filteredExercises = exercises.filter((ex) => {
+    // 1. Text Search
+    const matchesSearch =
+      ex.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ex.muscles?.name.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchesSearch;
+  });
+
+  // 🧮 1RM CALCULATOR LOGIC
+  const getOneRepMax = () => {
+    const w = parseFloat(weight);
+    const r = parseFloat(reps);
+
+    // Safety check: Formula breaks if reps are too high or inputs are empty
+    if (!w || !r || r === 0) return 0;
+    if (r === 1) return w; // If you did 1 rep, that IS your max
+
+    // Brzycki Formula
+    const max = w / (1.0278 - 0.0278 * r);
+    return Math.round(max);
+  };
+
+  const estimatedMax = getOneRepMax();
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -245,6 +299,29 @@ export default function ExerciseList() {
           <View style={{ marginBottom: 20 }}>
             {/* 1. Visuals */}
             <MuscleHeatmap />
+
+            {/* SEARCH BAR */}
+            <View style={styles.searchContainer}>
+              <Ionicons
+                name="search"
+                size={20}
+                color="#666"
+                style={{ marginRight: 10 }}
+              />
+              <TextInput
+                placeholder="Find an exercise..."
+                placeholderTextColor="#666"
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {/* Clear Button */}
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery("")}>
+                  <Ionicons name="close-circle" size={20} color="#666" />
+                </TouchableOpacity>
+              )}
+            </View>
 
             {/* 2. The Routine Selector */}
             <RoutineList
@@ -323,7 +400,7 @@ export default function ExerciseList() {
             )}
           </View>
         }
-        data={exercises}
+        data={filteredExercises}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderCard}
         contentContainerStyle={{ paddingBottom: 50 }}
@@ -365,6 +442,35 @@ export default function ExerciseList() {
               />
             </View>
 
+            {weight && reps ? (
+              <View style={styles.oneRepContainer}>
+                <Text style={styles.oneRepLabel}>ESTIMATED 1 REP MAX</Text>
+                <Text style={styles.oneRepValue}>{estimatedMax}kg</Text>
+              </View>
+            ) : null}
+
+            {weight ? <PlateCalculator weight={parseFloat(weight)} /> : null}
+
+            {/* 📝 NOTE INPUT */}
+            <View style={styles.noteContainer}>
+              <Ionicons
+                name="create-outline"
+                size={20}
+                color="#666"
+                style={{ marginRight: 10 }}
+              />
+              <TextInput
+                placeholder="Notes (e.g. Shoulder pain, Seat 4)"
+                placeholderTextColor="#555"
+                style={styles.noteInput}
+                value={note}
+                onChangeText={setNote}
+                maxLength={50} // Keep it short
+              />
+            </View>
+
+            {/* SAVE BUTTON */}
+
             <TouchableOpacity style={styles.saveButton} onPress={logSet}>
               <Text style={styles.saveButtonText}>LOG SET</Text>
             </TouchableOpacity>
@@ -381,6 +487,15 @@ export default function ExerciseList() {
 
       {showTimer && (
         <RestTimer initialSeconds={90} onClose={() => setShowTimer(false)} />
+      )}
+
+      {showConfetti && (
+        <ConfettiCannon
+          count={200}
+          origin={{ x: -10, y: 0 }}
+          autoStart={true}
+          fadeOut={true}
+        />
       )}
     </View>
   );
@@ -518,5 +633,66 @@ const styles = StyleSheet.create({
   },
   exitButton: {
     padding: 5,
+  },
+  // Search
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1E1E1E",
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    height: 45,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  searchInput: {
+    flex: 1,
+    color: "white",
+    height: "100%",
+  },
+
+  // One Rep Max (RM Style)
+  oneRepContainer: {
+    alignItems: "center",
+    marginTop: 15,
+    backgroundColor: "#333",
+    alignSelf: "center",
+    paddingVertical: 5,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#444",
+  },
+  oneRepLabel: {
+    color: "#bef264", // Lime Green
+    fontSize: 8,
+    fontWeight: "bold",
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  oneRepValue: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+
+  // Note container in Log Set
+  noteContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#111",
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    marginBottom: 15,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#333",
+    height: 50,
+  },
+  noteInput: {
+    flex: 1,
+    color: "white",
+    height: "100%",
   },
 });

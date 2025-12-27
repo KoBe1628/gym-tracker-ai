@@ -12,6 +12,8 @@ import { supabase } from "./lib/supabase";
 import { Calendar } from "react-native-calendars"; // 🗓️ The new library
 import BadgeGrid from "./BadgeGrid";
 import { feedback } from "./lib/haptics";
+import PersonalRecords from "./PersonalRecords";
+import { Ionicons } from "@expo/vector-icons";
 
 const THEME = {
   bg: "#121212",
@@ -34,6 +36,7 @@ export default function Profile() {
     maxWeight: 0,
     hasWeekendWorkout: false,
   });
+  const [showPRs, setShowPRs] = useState(false);
 
   useEffect(() => {
     getProfile();
@@ -168,6 +171,19 @@ export default function Profile() {
           </View>
         </View>
 
+        <TouchableOpacity
+          style={styles.prButton}
+          onPress={() => setShowPRs(true)}
+        >
+          <Ionicons
+            name="trophy-outline"
+            size={20}
+            color="black"
+            style={{ marginRight: 8 }}
+          />
+          <Text style={styles.prButtonText}>VIEW PERSONAL RECORDS</Text>
+        </TouchableOpacity>
+
         <BadgeGrid stats={badgeStats} />
 
         {/* 🗓️ CALENDAR SECTION */}
@@ -199,6 +215,8 @@ export default function Profile() {
             style={{ borderRadius: 10, borderWidth: 1, borderColor: "#333" }}
           />
         </View>
+
+        <PersonalRecords visible={showPRs} onClose={() => setShowPRs(false)} />
 
         {/* SETTINGS SECTION */}
         <Text style={styles.sectionTitle}>PREFERENCES</Text>
@@ -312,4 +330,18 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   signOutText: { color: THEME.danger, fontWeight: "bold" },
+  prButton: {
+    flexDirection: "row",
+    backgroundColor: THEME.primary, // Lime Green
+    padding: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 30,
+  },
+  prButtonText: {
+    color: "black",
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
 });

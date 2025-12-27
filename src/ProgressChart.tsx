@@ -1,20 +1,28 @@
 import React, { useEffect, useState } from "react";
 import {
+  StyleSheet,
   View,
   Text,
-  ActivityIndicator,
-  StyleSheet,
   Dimensions,
-  Alert,
-  TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
-import Svg, { Path, Circle, Line, Text as SvgText } from "react-native-svg"; // Reusing the tool we already have!
+import { LineChart } from "react-native-gifted-charts"; // Or your custom SVG if you stuck with that
 import { supabase } from "./lib/supabase";
-import { Ionicons } from "@expo/vector-icons";
+import Svg, { Polyline, Circle, Line, Text as SvgText } from "react-native-svg"; // Custom SVG imports
+
+// 🎨 THEME
+const THEME = {
+  bg: "#121212",
+  card: "#1E1E1E",
+  primary: "#bef264",
+  text: "#FFFFFF",
+  textDim: "#A1A1AA",
+  danger: "#EF4444",
+};
 
 export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
-  const [data, setData] = useState<number[]>([]);
-  const [labels, setLabels] = useState<string[]>([]);
+  const [rawLogs, setRawLogs] = useState<any[]>([]); // 📝 Store full DB rows here
+  const [chartData, setChartData] = useState<any[]>([]); // 📈 Store formatted points here
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,177 +30,194 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
   }, [exerciseId]);
 
   async function fetchHistory() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: logs } = await supabase
+    // 1. Fetch RAW data (Include 'note', 'reps', 'created_at')
+    const { data: logs, error } = await supabase
       .from("workout_logs")
-      .select(
-        `
-         created_at, 
-         weight_kg,
-         workouts!inner(user_id)
-      `
-      )
-      .eq("workouts.user_id", user.id)
+      .select("id, created_at, weight_kg, reps, note") // <--- Make sure 'note' is here
       .eq("exercise_id", exerciseId)
-      .order("created_at", { ascending: true })
-      .limit(7); // Show last 7 sessions to fit screen
+      .order("created_at", { ascending: true }); // Oldest first for the Chart
 
-    if (logs && logs.length > 0) {
-      setData(logs.map((l) => l.weight_kg));
-      setLabels(logs.map((l) => new Date(l.created_at).getDate().toString())); // Just the Day (e.g., "21")
+    if (error || !logs || logs.length === 0) {
+      setLoading(false);
+      return;
     }
+
+    // 2. Save RAW logs for the List (We reverse them so newest is at the top of the list)
+    setRawLogs([...logs].reverse());
+
+    // 3. Format data for the Chart (Keep your existing logic here)
+    // We Map: { value: 100, label: '12/22' }
+    const formatted = logs.map((log) => {
+      const date = new Date(log.created_at);
+      return {
+        value: log.weight_kg,
+        label: `${date.getDate()}`, // Just the day number
+        dataPointText: `${log.weight_kg}`,
+      };
+    });
+    setChartData(formatted);
     setLoading(false);
   }
 
-  async function deleteLastLog() {
-    if (data.length === 0) return;
-
-    Alert.alert(
-      "Undo Last Set?",
-      "This will permanently remove the most recent log for this exercise.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            // 1. Get the ID of the last log (we need to fetch it or store it)
-            // For MVP, let's just delete the most recent row in SQL for this user+exercise
-            const {
-              data: { user },
-            } = await supabase.auth.getUser();
-            if (!user) return;
-
-            // Get the latest log ID
-            const { data: latest } = await supabase
-              .from("workout_logs")
-              .select("id")
-              .eq("exercise_id", exerciseId)
-              // We really should filter by user here too,
-              // relying on RLS (Row Level Security) is safer but let's be explicit if possible
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .single();
-
-            if (latest) {
-              await supabase.from("workout_logs").delete().eq("id", latest.id);
-              fetchHistory(); // Refresh the chart!
-            }
-          },
-        },
-      ]
-    );
-  }
-
-  if (loading) return <ActivityIndicator color="#bef264" />;
-
-  if (data.length < 2) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>
-          Log at least 2 sessions to see your graph! 📈
+  // Helper for Custom Chart (If you are using the SVG version)
+  const renderCustomChart = () => {
+    if (chartData.length < 2)
+      return (
+        <Text style={{ color: "#666", marginTop: 20 }}>
+          Log more sets to see progress.
         </Text>
+      );
+
+    const height = 150;
+    const width = 280;
+    const maxVal = Math.max(...chartData.map((d) => d.value)) * 1.1;
+    const points = chartData
+      .map((d, i) => {
+        const x = (i / (chartData.length - 1)) * width;
+        const y = height - (d.value / maxVal) * height;
+        return `${x},${y}`;
+      })
+      .join(" ");
+
+    return (
+      <View style={{ height, width, marginTop: 20 }}>
+        <Svg height={height} width={width + 20}>
+          {/* The Line */}
+          <Polyline
+            points={points}
+            fill="none"
+            stroke={THEME.primary}
+            strokeWidth="3"
+          />
+          {/* The Dots & Labels */}
+          {chartData.map((d, i) => {
+            const x = (i / (chartData.length - 1)) * width;
+            const y = height - (d.value / maxVal) * height;
+            return (
+              <React.Fragment key={i}>
+                <Circle
+                  cx={x}
+                  cy={y}
+                  r="4"
+                  fill={THEME.bg}
+                  stroke={THEME.primary}
+                  strokeWidth="2"
+                />
+                <SvgText
+                  x={x}
+                  y={y - 10}
+                  fill="white"
+                  fontSize="10"
+                  fontWeight="bold"
+                  textAnchor="middle"
+                >
+                  {d.value}
+                </SvgText>
+                <SvgText
+                  x={x}
+                  y={height + 15}
+                  fill="#666"
+                  fontSize="10"
+                  textAnchor="middle"
+                >
+                  {d.label}
+                </SvgText>
+              </React.Fragment>
+            );
+          })}
+        </Svg>
       </View>
     );
-  }
-
-  // 📐 CHART MATH
-  const CHART_HEIGHT = 150;
-  const CHART_WIDTH = 250;
-  const MAX_VAL = Math.max(...data) + 5; // Add padding to top
-  const MIN_VAL = Math.min(...data) - 5;
-  const Y_RANGE = MAX_VAL - MIN_VAL || 1;
-
-  const getX = (index: number) => (index / (data.length - 1)) * CHART_WIDTH;
-  const getY = (val: number) =>
-    CHART_HEIGHT - ((val - MIN_VAL) / Y_RANGE) * CHART_HEIGHT;
-
-  // Build the SVG Path string (e.g., "M0 100 L50 80 L100 50...")
-  const path =
-    `M ${getX(0)} ${getY(data[0])} ` +
-    data.map((val, i) => `L ${getX(i)} ${getY(val)}`).join(" ");
+  };
 
   return (
     <View style={styles.container}>
-      {/* Replace <Text style={styles.title}>...</Text> with this: */}
       <View
         style={{
           flexDirection: "row",
           justifyContent: "space-between",
-          width: 280,
+          width: "100%",
           marginBottom: 10,
         }}
       >
         <Text style={styles.title}>STRENGTH CURVE 📈</Text>
-        <TouchableOpacity onPress={deleteLastLog}>
-          <Text style={{ color: "#EF4444", fontSize: 10, fontWeight: "bold" }}>
-            UNDO LAST
-          </Text>
-        </TouchableOpacity>
+        {/* Simple "Undo" placeholder - logic is in parent or add callback here */}
+        <Text style={{ color: THEME.danger, fontSize: 10, fontWeight: "bold" }}>
+          UNDO LAST
+        </Text>
       </View>
-      <View style={styles.chartBox}>
-        <Svg height={CHART_HEIGHT + 20} width={CHART_WIDTH + 20}>
-          {/* Grid Lines (Optional) */}
-          <Line
-            x1="0"
-            y1={CHART_HEIGHT}
-            x2={CHART_WIDTH}
-            y2={CHART_HEIGHT}
-            stroke="#333"
-            strokeWidth="1"
-          />
 
-          {/* The Data Line */}
-          <Path d={path} stroke="#bef264" strokeWidth="3" fill="none" />
+      {loading ? (
+        <ActivityIndicator color={THEME.primary} />
+      ) : (
+        renderCustomChart()
+      )}
 
-          {/* The Dots & Text */}
-          {data.map((val, i) => (
-            <React.Fragment key={i}>
-              <Circle cx={getX(i)} cy={getY(val)} r="4" fill="#bef264" />
-              {/* Show weight text above the dot */}
-              <SvgText
-                x={getX(i)}
-                y={getY(val) - 10}
-                fill="white"
-                fontSize="10"
-                fontWeight="bold"
-                textAnchor="middle"
+      {/* 📝 RECENT HISTORY LIST */}
+      <View style={{ marginTop: 30, width: "100%" }}>
+        <Text
+          style={{
+            color: "#A1A1AA",
+            fontSize: 10,
+            fontWeight: "bold",
+            marginBottom: 10,
+            letterSpacing: 1,
+          }}
+        >
+          RECENT LOGS
+        </Text>
+
+        {/* We use rawLogs here, NOT chartData */}
+        {rawLogs.slice(0, 3).map((log: any, index: number) => (
+          <View key={index} style={styles.logRow}>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{ color: "white", fontWeight: "bold", fontSize: 12 }}
               >
-                {val}
-              </SvgText>
-              {/* Show date text below */}
-              <SvgText
-                x={getX(i)}
-                y={CHART_HEIGHT + 15}
-                fill="#666"
-                fontSize="10"
-                textAnchor="middle"
-              >
-                {labels[i]}
-              </SvgText>
-            </React.Fragment>
-          ))}
-        </Svg>
+                {new Date(log.created_at).toLocaleDateString()}
+              </Text>
+              {/* 👇 This is where the Note appears */}
+              {log.note ? (
+                <Text style={styles.noteText}>"{log.note}"</Text>
+              ) : null}
+            </View>
+
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={{ color: "white", fontWeight: "bold" }}>
+                {log.weight_kg}{" "}
+                <Text style={{ fontSize: 10, color: "#666" }}>kg</Text>
+              </Text>
+              <Text style={{ color: "#666", fontSize: 10 }}>
+                {log.reps} reps
+              </Text>
+            </View>
+          </View>
+        ))}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { marginBottom: 20, alignItems: "center", width: "100%" },
+  container: { alignItems: "center", width: "100%", marginBottom: 20 },
   title: {
-    color: "white",
-    fontSize: 10,
+    color: "#A1A1AA",
+    fontSize: 12,
     fontWeight: "bold",
-    marginBottom: 10,
     letterSpacing: 1,
-    alignSelf: "flex-start",
   },
-  chartBox: { padding: 10 },
-  emptyContainer: { padding: 20, alignItems: "center" },
-  emptyText: { color: "#666", fontStyle: "italic", fontSize: 12 },
+  logRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#333",
+    paddingVertical: 12,
+  },
+  noteText: {
+    color: THEME.primary,
+    fontSize: 11,
+    fontStyle: "italic",
+    marginTop: 4,
+    opacity: 0.9,
+  },
 });
