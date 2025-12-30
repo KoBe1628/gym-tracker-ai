@@ -14,6 +14,7 @@ import BadgeGrid from "./BadgeGrid";
 import { feedback } from "./lib/haptics";
 import PersonalRecords from "./PersonalRecords";
 import { Ionicons } from "@expo/vector-icons";
+import SymmetryCard from "./SymmetryCard";
 
 const THEME = {
   bg: "#121212",
@@ -170,6 +171,8 @@ export default function Profile() {
             <Text style={styles.statLabel}>STATUS</Text>
           </View>
         </View>
+
+        <SymmetryCard />
 
         <TouchableOpacity
           style={styles.prButton}

@@ -30,10 +30,10 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
   }, [exerciseId]);
 
   async function fetchHistory() {
-    // 1. Fetch RAW data (Include 'note', 'reps', 'created_at')
+    // 1. Fetch RAW data (Include 'note', 'reps', 'created_at', 'tags')
     const { data: logs, error } = await supabase
       .from("workout_logs")
-      .select("id, created_at, weight_kg, reps, note") // <--- Make sure 'note' is here
+      .select("id, created_at, weight_kg, reps, note, tags")
       .eq("exercise_id", exerciseId)
       .order("created_at", { ascending: true }); // Oldest first for the Chart
 
@@ -176,7 +176,42 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
               >
                 {new Date(log.created_at).toLocaleDateString()}
               </Text>
-              {/* 👇 This is where the Note appears */}
+
+              {/* TAG BADGES */}
+              {log.tags && log.tags.length > 0 && (
+                <View style={{ flexDirection: "row", gap: 5, marginTop: 4 }}>
+                  {log.tags.map((t: string) => {
+                    let color = "#444";
+                    if (t === "Warm Up") color = "#eab308";
+                    if (t === "Failure") color = "#ef4444";
+                    if (t === "Drop Set") color = "#3b82f6";
+
+                    return (
+                      <View
+                        key={t}
+                        style={{
+                          backgroundColor: color,
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 8,
+                            color: "black",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {t.toUpperCase()}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* where the Note appears */}
               {log.note ? (
                 <Text style={styles.noteText}>"{log.note}"</Text>
               ) : null}
