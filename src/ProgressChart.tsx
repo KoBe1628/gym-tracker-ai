@@ -164,11 +164,11 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
             letterSpacing: 1,
           }}
         >
-          RECENT LOGS
+          FULL HISTORY
         </Text>
 
-        {/* We use rawLogs here, NOT chartData */}
-        {rawLogs.slice(0, 3).map((log: any, index: number) => (
+        {/* 🔄 CHANGED: Removed .slice(0, 3) so it shows EVERYTHING */}
+        {rawLogs.map((log: any, index: number) => (
           <View key={index} style={styles.logRow}>
             <View style={{ flex: 1 }}>
               <Text
@@ -211,7 +211,7 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
                 </View>
               )}
 
-              {/* where the Note appears */}
+              {/* Note */}
               {log.note ? (
                 <Text style={styles.noteText}>"{log.note}"</Text>
               ) : null}
@@ -228,6 +228,12 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
             </View>
           </View>
         ))}
+
+        {rawLogs.length === 0 && (
+          <Text style={{ color: "#444", fontStyle: "italic", marginTop: 10 }}>
+            No history yet.
+          </Text>
+        )}
       </View>
     </View>
   );

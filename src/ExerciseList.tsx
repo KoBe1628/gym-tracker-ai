@@ -11,6 +11,7 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from "react-native";
 import { supabase } from "./lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
@@ -415,7 +416,12 @@ export default function ExerciseList() {
 
             {/* TAB CONTENT */}
             {activeTab === "log" ? (
-              <View style={styles.tabContent}>
+              <ScrollView
+                style={styles.tabContent}
+                contentContainerStyle={{ paddingBottom: 50 }} // Extra space for keyboard
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled" // Allows tapping buttons while keyboard is up
+              >
                 {/* Inputs */}
                 <View style={styles.inputRow}>
                   <TextInput
@@ -508,19 +514,17 @@ export default function ExerciseList() {
                 <TouchableOpacity style={styles.saveButton} onPress={logSet}>
                   <Text style={styles.saveButtonText}>LOG SET</Text>
                 </TouchableOpacity>
-              </View>
+              </ScrollView>
             ) : (
               // History Tab
-              <View
-                style={[
-                  styles.tabContent,
-                  { justifyContent: "flex-start", paddingTop: 10 },
-                ]}
+              <ScrollView
+                style={styles.tabContent}
+                contentContainerStyle={{ paddingBottom: 20 }}
               >
                 {selectedExercise && (
                   <ProgressChart exerciseId={selectedExercise.id} />
                 )}
-              </View>
+              </ScrollView>
             )}
           </View>
         </KeyboardAvoidingView>
