@@ -15,6 +15,7 @@ import { feedback } from "./lib/haptics";
 import PersonalRecords from "./PersonalRecords";
 import { Ionicons } from "@expo/vector-icons";
 import SymmetryCard from "./SymmetryCard";
+import WorkoutSummary from "./WorkoutSummary";
 
 const THEME = {
   bg: "#121212",
@@ -38,6 +39,12 @@ export default function Profile() {
     hasWeekendWorkout: false,
   });
   const [showPRs, setShowPRs] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [selectedWorkoutId, setSelectedWorkoutId] = useState<number | null>(
+    null
+  );
+  // We need a map to quickly find the workout ID when a date is tapped
+  const [workoutMap, setWorkoutMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
     getProfile();
@@ -70,17 +77,22 @@ export default function Profile() {
         error,
       } = await supabase
         .from("workouts")
-        .select("started_at", { count: "exact" })
+        .select("id, started_at", { count: "exact" })
         .eq("user_id", user.id);
 
       setWorkoutCount(count || 0);
 
       // 2. 🗓️ Calendar Logic (Existing code)
       const dates: any = {};
+      const idMap: Record<string, number> = {}; // <--- New Map
       let hasWeekend = false; // 🆕 Track for badge
 
       workouts?.forEach((w) => {
         const dateStr = w.started_at.split("T")[0];
+
+        // Map Date -> ID
+        idMap[dateStr] = w.id;
+
         dates[dateStr] = {
           selected: true,
           selectedColor: THEME.primary,
@@ -93,6 +105,7 @@ export default function Profile() {
         if (day === 0 || day === 6) hasWeekend = true;
       });
       setMarkedDates(dates);
+      setWorkoutMap(idMap);
 
       // 3. 🏋️‍♂️ New: Fetch Max Weight for Badges
       // We look for the heaviest lift in the logs
@@ -215,6 +228,17 @@ export default function Profile() {
               textMonthFontSize: 16,
               textDayHeaderFontSize: 14,
             }}
+            onDayPress={(day: any) => {
+              const wId = workoutMap[day.dateString];
+              if (wId) {
+                feedback.light(); // Haptic tick
+                setSelectedWorkoutId(wId);
+                setShowHistory(true);
+              } else {
+                // Optional: Feedback for empty days
+                // Alert.alert("Rest Day", "No workout recorded on this date.")
+              }
+            }}
             style={{ borderRadius: 10, borderWidth: 1, borderColor: "#333" }}
           />
         </View>
@@ -245,6 +269,12 @@ export default function Profile() {
         <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
+
+        <WorkoutSummary
+          visible={showHistory}
+          workoutId={selectedWorkoutId}
+          onClose={() => setShowHistory(false)}
+        />
       </ScrollView>
     </View>
   );
