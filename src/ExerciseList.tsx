@@ -23,6 +23,7 @@ import { feedback } from "./lib/haptics";
 import PlateCalculator from "./PlateCalculator";
 import ConfettiCannon from "react-native-confetti-cannon";
 import WeeklyTarget from "./WeeklyTarget";
+import WorkoutSummary from "./WorkoutSummary";
 
 type Exercise = {
   id: number;
@@ -66,6 +67,8 @@ export default function ExerciseList() {
 
   // 🗂️ New Tab State
   const [activeTab, setActiveTab] = useState<"log" | "history">("log");
+  // Workout Summary State
+  const [showSummary, setShowSummary] = useState(false);
 
   //Helper to Toggle
   const toggleTag = (t: string) => {
@@ -113,22 +116,30 @@ export default function ExerciseList() {
       {
         text: "Finish",
         onPress: async () => {
+          // 1. Mark timestamp in DB
           const { error } = await supabase
             .from("workouts")
             .update({ ended_at: new Date().toISOString() })
             .eq("id", workoutId);
 
           if (!error) {
-            Alert.alert("WORKOUT COMPLETE! 🎉", "Great job today. Rest up.");
-            setWorkoutId(null);
-            setExercises(originalExercises);
-            setActiveRoutineId(null);
+            // 2. STOP! Don't reset yet. Show the Summary Screen.
+            setShowSummary(true);
           } else {
             Alert.alert("Error", error.message);
           }
         },
       },
     ]);
+  }
+
+  function closeSummary() {
+    setShowSummary(false);
+    // Now we reset the app state
+    setWorkoutId(null);
+    setExercises(originalExercises);
+    setActiveRoutineId(null);
+    setNote("");
   }
 
   async function startRoutine(routineId: number) {
@@ -546,6 +557,13 @@ export default function ExerciseList() {
           fadeOut={true}
         />
       )}
+
+      {/* 🧾 SUMMARY SCREEN */}
+      <WorkoutSummary
+        visible={showSummary}
+        workoutId={workoutId}
+        onClose={closeSummary}
+      />
     </View>
   );
 }
