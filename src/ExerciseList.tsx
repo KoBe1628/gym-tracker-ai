@@ -22,6 +22,7 @@ import RestTimer from "./RestTimer";
 import { feedback } from "./lib/haptics";
 import PlateCalculator from "./PlateCalculator";
 import ConfettiCannon from "react-native-confetti-cannon";
+import WeeklyTarget from "./WeeklyTarget";
 
 type Exercise = {
   id: number;
@@ -226,6 +227,9 @@ export default function ExerciseList() {
       <FlatList
         ListHeaderComponent={
           <View style={{ marginBottom: 20 }}>
+            {/* 0. Weekly Target Bar */}
+            <WeeklyTarget />
+
             {/* 1. Heatmap */}
             <MuscleHeatmap />
 
