@@ -19,11 +19,11 @@ import MuscleHeatmap from "./MuscleHeatmap";
 import RoutineList from "./RoutineList";
 import ProgressChart from "./ProgressChart";
 import RestTimer from "./RestTimer";
+import WeeklyTarget from "./WeeklyTarget"; // Ensure this is imported
+import WorkoutSummary from "./WorkoutSummary";
 import { feedback } from "./lib/haptics";
 import PlateCalculator from "./PlateCalculator";
 import ConfettiCannon from "react-native-confetti-cannon";
-import WeeklyTarget from "./WeeklyTarget";
-import WorkoutSummary from "./WorkoutSummary";
 
 type Exercise = {
   id: number;
@@ -31,16 +31,17 @@ type Exercise = {
   muscles: { name: string };
 };
 
-// 🎨 THEME CONFIGURATION
+// 🎨 THEME
 const THEME = {
   bg: "#121212",
   card: "#1E1E1E",
-  primary: "#bef264", // Lime Green
+  primary: "#bef264",
   text: "#FFFFFF",
   textDim: "#A1A1AA",
   danger: "#EF4444",
 };
 
+// 🏷️ TAG OPTIONS
 const AVAILABLE_TAGS = ["Warm Up", "Failure", "Drop Set"];
 
 export default function ExerciseList() {
@@ -57,6 +58,9 @@ export default function ExerciseList() {
   const [note, setNote] = useState("");
   const [tags, setTags] = useState<string[]>([]);
 
+  // 🏆 PR Logic
+  const [currentPR, setCurrentPR] = useState(0);
+
   // ⚙️ Logic State
   const [activeRoutineId, setActiveRoutineId] = useState<number | null>(null);
   const [activeRoutineName, setActiveRoutineName] = useState<string>("");
@@ -64,20 +68,10 @@ export default function ExerciseList() {
   const [showTimer, setShowTimer] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
-
-  // 🗂️ New Tab State
-  const [activeTab, setActiveTab] = useState<"log" | "history">("log");
-  // Workout Summary State
   const [showSummary, setShowSummary] = useState(false);
 
-  //Helper to Toggle
-  const toggleTag = (t: string) => {
-    if (tags.includes(t)) {
-      setTags(tags.filter((tag) => tag !== t)); // Remove
-    } else {
-      setTags([...tags, t]); // Add
-    }
-  };
+  // 🗂️ Tab State
+  const [activeTab, setActiveTab] = useState<"log" | "history">("log");
 
   useEffect(() => {
     fetchExercises();
@@ -89,6 +83,20 @@ export default function ExerciseList() {
       .select(`id, name, muscles ( name )`);
     setExercises(data as any);
     setOriginalExercises(data as any);
+  }
+
+  // 🏆 Fetch PR for specific exercise
+  async function fetchPersonalRecord(exerciseId: number) {
+    const { data } = await supabase
+      .from("workout_logs")
+      .select("weight_kg")
+      .eq("exercise_id", exerciseId)
+      .order("weight_kg", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (data) setCurrentPR(data.weight_kg);
+    else setCurrentPR(0);
   }
 
   async function startWorkout() {
@@ -103,9 +111,7 @@ export default function ExerciseList() {
       .select();
 
     if (error) Alert.alert("Error", error.message);
-    if (data) {
-      setWorkoutId(data[0].id);
-    }
+    if (data) setWorkoutId(data[0].id);
   }
 
   async function finishWorkout() {
@@ -116,15 +122,13 @@ export default function ExerciseList() {
       {
         text: "Finish",
         onPress: async () => {
-          // 1. Mark timestamp in DB
           const { error } = await supabase
             .from("workouts")
             .update({ ended_at: new Date().toISOString() })
             .eq("id", workoutId);
 
           if (!error) {
-            // 2. STOP! Don't reset yet. Show the Summary Screen.
-            setShowSummary(true);
+            setShowSummary(true); // Show Summary instead of immediate reset
           } else {
             Alert.alert("Error", error.message);
           }
@@ -135,7 +139,6 @@ export default function ExerciseList() {
 
   function closeSummary() {
     setShowSummary(false);
-    // Now we reset the app state
     setWorkoutId(null);
     setExercises(originalExercises);
     setActiveRoutineId(null);
@@ -168,18 +171,28 @@ export default function ExerciseList() {
     setWeight("");
     setReps("");
     setNote("");
-    setActiveTab("log"); // Reset to Log tab
+    setTags([]);
+    setActiveTab("log");
+
+    // Reset & Fetch PR
+    setCurrentPR(0);
+    fetchPersonalRecord(exercise.id);
+
     setModalVisible(true);
   }
 
   async function logSet() {
     if (!weight || !reps) return Alert.alert("Error", "Enter weight and reps");
 
+    const inputWeight = parseFloat(weight);
+    // Check PR logic (Must be > 0 to be a 'record' worth celebrating)
+    const isNewRecord = currentPR > 0 && inputWeight > currentPR;
+
     const { error } = await supabase.from("workout_logs").insert([
       {
         workout_id: workoutId,
         exercise_id: selectedExercise?.id,
-        weight_kg: parseFloat(weight),
+        weight_kg: inputWeight,
         reps: parseInt(reps),
         note: note.trim(),
         tags: tags,
@@ -190,9 +203,19 @@ export default function ExerciseList() {
       setNote("");
       setTags([]);
 
-      // Check for Confetti Trigger
-      if (parseFloat(weight) >= 100 || parseFloat(reps) >= 12) {
+      // Intelligent Celebration
+      if (isNewRecord) {
         setShowConfetti(true);
+        Alert.alert(
+          "🏆 NEW RECORD!",
+          `You just crushed your old PR of ${currentPR}kg!`
+        );
+        setCurrentPR(inputWeight); // Update local PR immediately
+      } else if (inputWeight >= 100 || parseInt(reps) >= 12) {
+        setShowConfetti(true);
+      }
+
+      if (showConfetti || isNewRecord) {
         setTimeout(() => setShowConfetti(false), 5000);
       }
 
@@ -212,7 +235,7 @@ export default function ExerciseList() {
     if (!error) Alert.alert("Added!", `${exercise.name} added to routine.`);
   }
 
-  // 🧮 1RM Calculation Helper
+  // 🧮 1RM Calc
   const getOneRepMax = () => {
     const w = parseFloat(weight);
     const r = parseFloat(reps);
@@ -222,7 +245,7 @@ export default function ExerciseList() {
   };
   const estimatedMax = getOneRepMax();
 
-  // 🔍 Filter Logic
+  // 🔍 Filter
   const filteredExercises = exercises.filter((ex) => {
     const matchesSearch =
       ex.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -238,7 +261,7 @@ export default function ExerciseList() {
       <FlatList
         ListHeaderComponent={
           <View style={{ marginBottom: 20 }}>
-            {/* 0. Weekly Target Bar */}
+            {/* 0. Weekly Target */}
             <WeeklyTarget />
 
             {/* 1. Heatmap */}
@@ -433,9 +456,9 @@ export default function ExerciseList() {
             {activeTab === "log" ? (
               <ScrollView
                 style={styles.tabContent}
-                contentContainerStyle={{ paddingBottom: 50 }} // Extra space for keyboard
+                contentContainerStyle={{ paddingBottom: 50 }}
                 showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled" // Allows tapping buttons while keyboard is up
+                keyboardShouldPersistTaps="handled"
               >
                 {/* Inputs */}
                 <View style={styles.inputRow}>
@@ -459,33 +482,47 @@ export default function ExerciseList() {
                   />
                 </View>
 
-                {/* Stats & Tools */}
-                {weight && reps ? (
-                  <View style={styles.oneRepContainer}>
-                    <Text style={styles.oneRepLabel}>ESTIMATED 1 REP MAX</Text>
-                    <Text style={styles.oneRepValue}>{estimatedMax}kg</Text>
-                  </View>
-                ) : null}
+                {/* Stats & Tools: Now showing BOTH 1RM and Current PR */}
+                <View style={styles.statsRow}>
+                  {weight && reps ? (
+                    <View style={styles.statChip}>
+                      <Text style={styles.statLabel}>EST. 1RM</Text>
+                      <Text style={styles.statValue}>{estimatedMax}kg</Text>
+                    </View>
+                  ) : null}
+
+                  {currentPR > 0 && (
+                    <View style={[styles.statChip, { borderColor: "#EAB308" }]}>
+                      <Text style={[styles.statLabel, { color: "#EAB308" }]}>
+                        CURRENT PR
+                      </Text>
+                      <Text style={styles.statValue}>{currentPR}kg</Text>
+                    </View>
+                  )}
+                </View>
 
                 {weight ? (
                   <PlateCalculator weight={parseFloat(weight)} />
                 ) : null}
 
-                {/* TAGS SELECTOR */}
+                {/* 🏷️ TAGS */}
                 <View style={styles.tagRow}>
                   {AVAILABLE_TAGS.map((t) => {
                     const isActive = tags.includes(t);
-                    let color = "#333"; // Default
+                    let color = "#333";
                     if (isActive) {
-                      if (t === "Warm Up") color = "#eab308"; // Yellow
-                      if (t === "Failure") color = "#ef4444"; // Red
-                      if (t === "Drop Set") color = "#3b82f6"; // Blue
+                      if (t === "Warm Up") color = "#eab308";
+                      if (t === "Failure") color = "#ef4444";
+                      if (t === "Drop Set") color = "#3b82f6";
                     }
-
                     return (
                       <TouchableOpacity
                         key={t}
-                        onPress={() => toggleTag(t)}
+                        onPress={() => {
+                          if (tags.includes(t))
+                            setTags(tags.filter((tag) => tag !== t));
+                          else setTags([...tags, t]);
+                        }}
                         style={[
                           styles.tagPill,
                           {
@@ -531,10 +568,9 @@ export default function ExerciseList() {
                 </TouchableOpacity>
               </ScrollView>
             ) : (
-              // History Tab
               <ScrollView
                 style={styles.tabContent}
-                contentContainerStyle={{ paddingBottom: 20 }}
+                contentContainerStyle={{ paddingBottom: 50, paddingTop: 10 }}
               >
                 {selectedExercise && (
                   <ProgressChart exerciseId={selectedExercise.id} />
@@ -549,12 +585,15 @@ export default function ExerciseList() {
       {showTimer && (
         <RestTimer initialSeconds={90} onClose={() => setShowTimer(false)} />
       )}
+
+      {/* 🏆 Confetti (with Colors!) */}
       {showConfetti && (
         <ConfettiCannon
           count={200}
           origin={{ x: -10, y: 0 }}
           autoStart={true}
           fadeOut={true}
+          colors={["#FFD700", "#FFA500", "#FFFFFF", "#bef264"]} // Gold, Orange, White, Lime
         />
       )}
 
@@ -676,9 +715,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    paddingBottom: 40,
-    minHeight: "60%",
-  },
+    paddingBottom: 0,
+    height: "75%",
+  }, // Taller for keyboard
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -706,7 +745,7 @@ const styles = StyleSheet.create({
   activeTabText: { color: "black" },
   tabContent: { flex: 1 },
 
-  // Modal Inputs & Tools
+  // Inputs
   inputRow: { flexDirection: "row", gap: 15, marginBottom: 20 },
   input: {
     backgroundColor: "#111",
@@ -720,26 +759,45 @@ const styles = StyleSheet.create({
     borderColor: "#333",
   },
 
-  oneRepContainer: {
-    alignItems: "center",
-    marginTop: 0,
+  // Stats Row (New!)
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
     marginBottom: 15,
+  },
+  statChip: {
+    alignItems: "center",
     backgroundColor: "#333",
-    alignSelf: "center",
     paddingVertical: 5,
     paddingHorizontal: 15,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#444",
+    minWidth: 100,
   },
-  oneRepLabel: {
+  statLabel: {
     color: "#bef264",
     fontSize: 8,
     fontWeight: "bold",
     letterSpacing: 1,
     marginBottom: 2,
   },
-  oneRepValue: { color: "white", fontSize: 18, fontWeight: "900" },
+  statValue: { color: "white", fontSize: 16, fontWeight: "900" },
+
+  // Tags
+  tagRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 15,
+    justifyContent: "center",
+  },
+  tagPill: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  tagText: { fontSize: 10, fontWeight: "bold" },
 
   noteContainer: {
     flexDirection: "row",
@@ -762,6 +820,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 12,
     alignItems: "center",
+    marginBottom: 20,
   },
   saveButtonText: {
     color: "black",
@@ -769,19 +828,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 1,
   },
-
-  // Tags
-  tagRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 15,
-    justifyContent: "center",
-  },
-  tagPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  tagText: { fontSize: 10, fontWeight: "bold" },
 });
