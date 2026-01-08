@@ -140,7 +140,7 @@ export default function ExerciseList() {
     const { error } = await supabase.from("exercises").insert([
       {
         name: newName,
-        muscle_id: newMuscleId,
+        target_muscle_id: newMuscleId,
         is_bodyweight: isBodyweight,
         created_by: user.id, // 🔒 Links to YOU only
       },
@@ -480,91 +480,93 @@ export default function ExerciseList() {
         animationType="slide"
         transparent={true}
       >
+        {/* 1. The Wrapper IS the KeyboardAvoidingView */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
-          <View style={styles.modalView}>
+          {/* 2. The Card is just a normal View now (No absolute positioning) */}
+          <View style={styles.creatorModalView}>
             <Text style={styles.modalTitle}>THE LAB 🧪</Text>
             <Text style={{ color: "#888", marginBottom: 20 }}>
               Create a custom exercise for your library.
             </Text>
 
-            {/* Name */}
-            <TextInput
-              placeholder="Exercise Name (e.g. Super Press)"
-              placeholderTextColor="#666"
-              style={[
-                styles.input,
-                { width: "100%", textAlign: "left", marginBottom: 20 },
-              ]}
-              value={newName}
-              onChangeText={setNewName}
-            />
-
-            {/* Bodyweight Toggle */}
-            <View style={styles.switchRow}>
-              <Text style={{ color: "white", fontWeight: "bold" }}>
-                Is Bodyweight?
-              </Text>
-              <Switch
-                value={isBodyweight}
-                onValueChange={setIsBodyweight}
-                trackColor={{ false: "#333", true: THEME.primary }}
-                thumbColor={"white"}
-              />
-            </View>
-
-            {/* Muscle Selector */}
-            <Text
-              style={{
-                color: "#666",
-                fontSize: 12,
-                marginBottom: 10,
-                alignSelf: "flex-start",
-              }}
-            >
-              PRIMARY MUSCLE:
-            </Text>
+            {/* 3. ScrollView handles the content if screen is small */}
             <ScrollView
-              horizontal
-              style={{ maxHeight: 50, marginBottom: 20 }}
-              contentContainerStyle={{ gap: 8 }}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              {musclesList.map((m) => (
-                <TouchableOpacity
-                  key={m.id}
-                  style={[
-                    styles.chip,
-                    newMuscleId === m.id && styles.activeChip,
-                  ]}
-                  onPress={() => setNewMuscleId(m.id)}
-                >
-                  <Text
+              {/* Name Input */}
+              <Text style={styles.label}>NAME:</Text>
+              <TextInput
+                placeholder="Ex: Super Press"
+                placeholderTextColor="#555"
+                style={styles.creatorInput}
+                value={newName}
+                onChangeText={setNewName}
+              />
+
+              {/* Bodyweight Toggle */}
+              <View style={styles.switchRow}>
+                <Text style={{ color: "white", fontWeight: "bold" }}>
+                  Is Bodyweight?
+                </Text>
+                <Switch
+                  value={isBodyweight}
+                  onValueChange={setIsBodyweight}
+                  trackColor={{ false: "#333", true: THEME.primary }}
+                  thumbColor={"white"}
+                />
+              </View>
+
+              {/* Muscle Selector */}
+              <Text style={styles.label}>PRIMARY MUSCLE:</Text>
+              <ScrollView
+                horizontal
+                style={{ maxHeight: 50, marginBottom: 30 }}
+                contentContainerStyle={{ gap: 8 }}
+                showsHorizontalScrollIndicator={false}
+              >
+                {musclesList.map((m) => (
+                  <TouchableOpacity
+                    key={m.id}
                     style={[
-                      styles.chipText,
-                      newMuscleId === m.id && { color: "black" },
+                      styles.chip,
+                      newMuscleId === m.id && styles.activeChip,
                     ]}
+                    onPress={() => setNewMuscleId(m.id)}
                   >
-                    {m.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.chipText,
+                        newMuscleId === m.id && { color: "black" },
+                      ]}
+                    >
+                      {m.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={createExercise}
+              >
+                <Text style={styles.saveButtonText}>CREATE EXERCISE</Text>
+              </TouchableOpacity>
+
+              {/* Cancel Button */}
+              <TouchableOpacity
+                onPress={() => setCreateModalVisible(false)}
+                style={{ marginTop: 10, padding: 15, alignItems: "center" }}
+              >
+                <Text style={{ color: "#666", fontWeight: "bold" }}>
+                  CANCEL
+                </Text>
+              </TouchableOpacity>
             </ScrollView>
-
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={createExercise}
-            >
-              <Text style={styles.saveButtonText}>CREATE EXERCISE</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setCreateModalVisible(false)}
-              style={{ marginTop: 15 }}
-            >
-              <Text style={{ color: "#666" }}>Cancel</Text>
-            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -789,6 +791,46 @@ const styles = StyleSheet.create({
     paddingTop: 50,
   },
 
+  // --- MODAL LAYOUT FIXES (The Critical Part) ---
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "flex-end", // This pushes the view to the bottom naturally
+  },
+
+  creatorModalView: {
+    backgroundColor: "#18181b",
+    width: "100%",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 30,
+    paddingBottom: 40,
+    maxHeight: "85%", // Let it grow if needed, but don't force fixed height
+    // REMOVED: position: 'absolute' and bottom: 0 (This was the bug!)
+  },
+
+  creatorInput: {
+    backgroundColor: "#27272a",
+    color: "white",
+    padding: 15,
+    borderRadius: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "#333",
+    marginBottom: 20,
+    width: "100%",
+  },
+
+  label: {
+    color: "#666",
+    fontSize: 10,
+    fontWeight: "bold",
+    marginBottom: 8,
+    letterSpacing: 1,
+    alignSelf: "flex-start",
+  },
+  // ----------------------------------------------
+
   // Header & Search
   actionRow: {
     flexDirection: "row",
@@ -893,12 +935,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // Modal Structure
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "flex-end",
-  },
+  // Logger Modal (The Standard One)
   modalView: {
     backgroundColor: "#18181b",
     borderTopLeftRadius: 24,
@@ -915,7 +952,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 22, fontWeight: "bold", color: "white" },
 
-  // Creator Modal Chips
+  // Chips & Switches
   chip: {
     paddingHorizontal: 15,
     paddingVertical: 8,
