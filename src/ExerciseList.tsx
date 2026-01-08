@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Switch,
 } from "react-native";
 import { supabase } from "./lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,7 +20,7 @@ import MuscleHeatmap from "./MuscleHeatmap";
 import RoutineList from "./RoutineList";
 import ProgressChart from "./ProgressChart";
 import RestTimer from "./RestTimer";
-import WeeklyTarget from "./WeeklyTarget"; // Ensure this is imported
+import WeeklyTarget from "./WeeklyTarget";
 import WorkoutSummary from "./WorkoutSummary";
 import { feedback } from "./lib/haptics";
 import PlateCalculator from "./PlateCalculator";
@@ -28,7 +29,16 @@ import ConfettiCannon from "react-native-confetti-cannon";
 type Exercise = {
   id: number;
   name: string;
-  muscles: { name: string };
+  is_bodyweight: boolean; // 🆕 New Flag
+  muscles: {
+    id: number;
+    name: string;
+  };
+};
+
+type Muscle = {
+  id: number;
+  name: string;
 };
 
 // 🎨 THEME
@@ -46,6 +56,8 @@ const AVAILABLE_TAGS = ["Warm Up", "Failure", "Drop Set"];
 
 export default function ExerciseList() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [musclesList, setMusclesList] = useState<Muscle[]>([]); // 🆕 For the creator
+
   const [workoutId, setWorkoutId] = useState<number | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(
@@ -57,6 +69,12 @@ export default function ExerciseList() {
   const [reps, setReps] = useState("");
   const [note, setNote] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+
+  // 🧪 Creator Modal State
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newMuscleId, setNewMuscleId] = useState<number | null>(null);
+  const [isBodyweight, setIsBodyweight] = useState(false);
 
   // 🏆 PR Logic
   const [currentPR, setCurrentPR] = useState(0);
@@ -74,18 +92,25 @@ export default function ExerciseList() {
   const [activeTab, setActiveTab] = useState<"log" | "history">("log");
 
   useEffect(() => {
-    fetchExercises();
+    fetchData();
   }, []);
 
-  async function fetchExercises() {
-    const { data } = await supabase
+  async function fetchData() {
+    // 1. Fetch Exercises (Now includes created_by via RLS)
+    const { data: exData } = await supabase
       .from("exercises")
-      .select(`id, name, muscles ( name )`);
-    setExercises(data as any);
-    setOriginalExercises(data as any);
+      .select(`id, name, is_bodyweight, muscles ( id, name )`)
+      .order("name"); // Alphabetical
+
+    setExercises(exData as any);
+    setOriginalExercises(exData as any);
+
+    // 2. Fetch Muscles (For the Creator Dropdown)
+    const { data: mData } = await supabase.from("muscles").select("id, name");
+    setMusclesList(mData || []);
   }
 
-  // 🏆 Fetch PR for specific exercise
+  // 🏆 Fetch PR
   async function fetchPersonalRecord(exerciseId: number) {
     const { data } = await supabase
       .from("workout_logs")
@@ -97,6 +122,40 @@ export default function ExerciseList() {
 
     if (data) setCurrentPR(data.weight_kg);
     else setCurrentPR(0);
+  }
+
+  // 🧪 CREATE CUSTOM EXERCISE
+  async function createExercise() {
+    if (!newName || !newMuscleId)
+      return Alert.alert(
+        "Missing Info",
+        "Please add a name and pick a muscle."
+      );
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from("exercises").insert([
+      {
+        name: newName,
+        muscle_id: newMuscleId,
+        is_bodyweight: isBodyweight,
+        created_by: user.id, // 🔒 Links to YOU only
+      },
+    ]);
+
+    if (error) {
+      Alert.alert("Error", error.message);
+    } else {
+      Alert.alert("Success", "Exercise created!");
+      setCreateModalVisible(false);
+      setNewName("");
+      setIsBodyweight(false);
+      setNewMuscleId(null);
+      fetchData(); // Refresh list
+    }
   }
 
   async function startWorkout() {
@@ -128,7 +187,7 @@ export default function ExerciseList() {
             .eq("id", workoutId);
 
           if (!error) {
-            setShowSummary(true); // Show Summary instead of immediate reset
+            setShowSummary(true);
           } else {
             Alert.alert("Error", error.message);
           }
@@ -174,7 +233,6 @@ export default function ExerciseList() {
     setTags([]);
     setActiveTab("log");
 
-    // Reset & Fetch PR
     setCurrentPR(0);
     fetchPersonalRecord(exercise.id);
 
@@ -182,10 +240,12 @@ export default function ExerciseList() {
   }
 
   async function logSet() {
-    if (!weight || !reps) return Alert.alert("Error", "Enter weight and reps");
+    // Validate: Weight is only required if NOT bodyweight (allow 0 for bodyweight)
+    if ((!weight && !selectedExercise?.is_bodyweight) || !reps)
+      return Alert.alert("Error", "Enter data");
 
-    const inputWeight = parseFloat(weight);
-    // Check PR logic (Must be > 0 to be a 'record' worth celebrating)
+    const inputWeight = weight ? parseFloat(weight) : 0;
+
     const isNewRecord = currentPR > 0 && inputWeight > currentPR;
 
     const { error } = await supabase.from("workout_logs").insert([
@@ -203,14 +263,13 @@ export default function ExerciseList() {
       setNote("");
       setTags([]);
 
-      // Intelligent Celebration
       if (isNewRecord) {
         setShowConfetti(true);
         Alert.alert(
           "🏆 NEW RECORD!",
           `You just crushed your old PR of ${currentPR}kg!`
         );
-        setCurrentPR(inputWeight); // Update local PR immediately
+        setCurrentPR(inputWeight);
       } else if (inputWeight >= 100 || parseInt(reps) >= 12) {
         setShowConfetti(true);
       }
@@ -237,9 +296,9 @@ export default function ExerciseList() {
 
   // 🧮 1RM Calc
   const getOneRepMax = () => {
-    const w = parseFloat(weight);
-    const r = parseFloat(reps);
-    if (!w || !r || r === 0) return 0;
+    const w = parseFloat(weight) || 0;
+    const r = parseFloat(reps) || 0;
+    if (r === 0) return 0;
     if (r === 1) return w;
     return Math.round(w / (1.0278 - 0.0278 * r));
   };
@@ -261,13 +320,10 @@ export default function ExerciseList() {
       <FlatList
         ListHeaderComponent={
           <View style={{ marginBottom: 20 }}>
-            {/* 0. Weekly Target */}
             <WeeklyTarget />
-
-            {/* 1. Heatmap */}
             <MuscleHeatmap />
 
-            {/* 2. Search */}
+            {/* Search */}
             <View style={styles.searchContainer}>
               <Ionicons
                 name="search"
@@ -289,7 +345,6 @@ export default function ExerciseList() {
               )}
             </View>
 
-            {/* 3. Routines */}
             <RoutineList
               onSelectRoutine={(id) => startRoutine(id)}
               onEnterEditMode={(id, name) => {
@@ -302,7 +357,7 @@ export default function ExerciseList() {
               }}
             />
 
-            {/* 4. Action Bar / Edit Mode Banner */}
+            {/* Edit Banner / Header */}
             {activeRoutineId ? (
               <View style={styles.editBanner}>
                 <View>
@@ -375,6 +430,7 @@ export default function ExerciseList() {
                 <Text style={styles.cardTitle}>{item.name}</Text>
                 <Text style={styles.cardSubtitle}>
                   {item.muscles?.name.toUpperCase()}
+                  {item.is_bodyweight ? " • BODYWEIGHT" : ""}
                 </Text>
               </View>
               <View
@@ -400,17 +456,126 @@ export default function ExerciseList() {
             </TouchableOpacity>
           );
         }}
+        // 👇 CREATE BUTTON AT BOTTOM
+        ListFooterComponent={
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={() => setCreateModalVisible(true)}
+          >
+            <Ionicons
+              name="flask-outline"
+              size={20}
+              color="black"
+              style={{ marginRight: 10 }}
+            />
+            <Text style={styles.createButtonText}>CREATE CUSTOM EXERCISE</Text>
+          </TouchableOpacity>
+        }
         contentContainerStyle={{ paddingBottom: 50 }}
       />
 
-      {/* --- TABBED MODAL --- */}
+      {/* --- 🧪 CREATE EXERCISE MODAL --- */}
+      <Modal
+        visible={createModalVisible}
+        animationType="slide"
+        transparent={true}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalView}>
+            <Text style={styles.modalTitle}>THE LAB 🧪</Text>
+            <Text style={{ color: "#888", marginBottom: 20 }}>
+              Create a custom exercise for your library.
+            </Text>
+
+            {/* Name */}
+            <TextInput
+              placeholder="Exercise Name (e.g. Super Press)"
+              placeholderTextColor="#666"
+              style={[
+                styles.input,
+                { width: "100%", textAlign: "left", marginBottom: 20 },
+              ]}
+              value={newName}
+              onChangeText={setNewName}
+            />
+
+            {/* Bodyweight Toggle */}
+            <View style={styles.switchRow}>
+              <Text style={{ color: "white", fontWeight: "bold" }}>
+                Is Bodyweight?
+              </Text>
+              <Switch
+                value={isBodyweight}
+                onValueChange={setIsBodyweight}
+                trackColor={{ false: "#333", true: THEME.primary }}
+                thumbColor={"white"}
+              />
+            </View>
+
+            {/* Muscle Selector */}
+            <Text
+              style={{
+                color: "#666",
+                fontSize: 12,
+                marginBottom: 10,
+                alignSelf: "flex-start",
+              }}
+            >
+              PRIMARY MUSCLE:
+            </Text>
+            <ScrollView
+              horizontal
+              style={{ maxHeight: 50, marginBottom: 20 }}
+              contentContainerStyle={{ gap: 8 }}
+            >
+              {musclesList.map((m) => (
+                <TouchableOpacity
+                  key={m.id}
+                  style={[
+                    styles.chip,
+                    newMuscleId === m.id && styles.activeChip,
+                  ]}
+                  onPress={() => setNewMuscleId(m.id)}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      newMuscleId === m.id && { color: "black" },
+                    ]}
+                  >
+                    {m.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={createExercise}
+            >
+              <Text style={styles.saveButtonText}>CREATE EXERCISE</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setCreateModalVisible(false)}
+              style={{ marginTop: 15 }}
+            >
+              <Text style={{ color: "#666" }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* --- LOGGING MODAL --- */}
       <Modal animationType="slide" transparent={true} visible={modalVisible}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
           <View style={styles.modalView}>
-            {/* Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{selectedExercise?.name}</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
@@ -418,7 +583,6 @@ export default function ExerciseList() {
               </TouchableOpacity>
             </View>
 
-            {/* Tabs */}
             <View style={styles.tabContainer}>
               <TouchableOpacity
                 style={[styles.tab, activeTab === "log" && styles.activeTab]}
@@ -452,7 +616,6 @@ export default function ExerciseList() {
               </TouchableOpacity>
             </View>
 
-            {/* TAB CONTENT */}
             {activeTab === "log" ? (
               <ScrollView
                 style={styles.tabContent}
@@ -460,10 +623,12 @@ export default function ExerciseList() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
               >
-                {/* Inputs */}
+                {/* Inputs: Placeholder changes based on Bodyweight flag */}
                 <View style={styles.inputRow}>
                   <TextInput
-                    placeholder="KG"
+                    placeholder={
+                      selectedExercise?.is_bodyweight ? "Added Wgt (+kg)" : "KG"
+                    }
                     placeholderTextColor="#666"
                     keyboardType="numeric"
                     returnKeyType="done"
@@ -482,7 +647,7 @@ export default function ExerciseList() {
                   />
                 </View>
 
-                {/* Stats & Tools: Now showing BOTH 1RM and Current PR */}
+                {/* Stats & Tools */}
                 <View style={styles.statsRow}>
                   {weight && reps ? (
                     <View style={styles.statChip}>
@@ -501,11 +666,25 @@ export default function ExerciseList() {
                   )}
                 </View>
 
-                {weight ? (
+                {/* 🧠 SMART LOGIC: Hide Plates if Bodyweight */}
+                {!selectedExercise?.is_bodyweight && weight ? (
                   <PlateCalculator weight={parseFloat(weight)} />
                 ) : null}
 
-                {/* 🏷️ TAGS */}
+                {selectedExercise?.is_bodyweight && (
+                  <Text
+                    style={{
+                      color: "#666",
+                      textAlign: "center",
+                      fontSize: 12,
+                      marginBottom: 15,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    (Bodyweight exercise: Plates hidden)
+                  </Text>
+                )}
+
                 <View style={styles.tagRow}>
                   {AVAILABLE_TAGS.map((t) => {
                     const isActive = tags.includes(t);
@@ -544,7 +723,6 @@ export default function ExerciseList() {
                   })}
                 </View>
 
-                {/* Note Input */}
                 <View style={styles.noteContainer}>
                   <Ionicons
                     name="create-outline"
@@ -562,7 +740,6 @@ export default function ExerciseList() {
                   />
                 </View>
 
-                {/* Log Button */}
                 <TouchableOpacity style={styles.saveButton} onPress={logSet}>
                   <Text style={styles.saveButtonText}>LOG SET</Text>
                 </TouchableOpacity>
@@ -581,23 +758,20 @@ export default function ExerciseList() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* --- UTILITIES --- */}
       {showTimer && (
         <RestTimer initialSeconds={90} onClose={() => setShowTimer(false)} />
       )}
 
-      {/* 🏆 Confetti (with Colors!) */}
       {showConfetti && (
         <ConfettiCannon
           count={200}
           origin={{ x: -10, y: 0 }}
           autoStart={true}
           fadeOut={true}
-          colors={["#FFD700", "#FFA500", "#FFFFFF", "#bef264"]} // Gold, Orange, White, Lime
+          colors={["#FFD700", "#FFA500", "#FFFFFF", "#bef264"]}
         />
       )}
 
-      {/* 🧾 SUMMARY SCREEN */}
       <WorkoutSummary
         visible={showSummary}
         workoutId={workoutId}
@@ -650,6 +824,21 @@ const styles = StyleSheet.create({
     borderRadius: 30,
   },
   startButtonText: { color: "black", fontWeight: "bold", fontSize: 12 },
+  createButton: {
+    flexDirection: "row",
+    backgroundColor: THEME.primary,
+    padding: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 20,
+  },
+  createButtonText: {
+    color: "black",
+    fontWeight: "bold",
+    fontSize: 14,
+    letterSpacing: 1,
+  },
 
   // Routine Edit Banner
   editBanner: {
@@ -717,7 +906,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 0,
     height: "75%",
-  }, // Taller for keyboard
+  },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -725,6 +914,28 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: { fontSize: 22, fontWeight: "bold", color: "white" },
+
+  // Creator Modal Chips
+  chip: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#333",
+    borderWidth: 1,
+    borderColor: "#444",
+  },
+  activeChip: { backgroundColor: THEME.primary, borderColor: THEME.primary },
+  chipText: { color: "#ccc", fontSize: 12, fontWeight: "bold" },
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 20,
+    backgroundColor: "#27272a",
+    padding: 15,
+    borderRadius: 10,
+  },
 
   // Tabs
   tabContainer: {
@@ -759,7 +970,6 @@ const styles = StyleSheet.create({
     borderColor: "#333",
   },
 
-  // Stats Row (New!)
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -784,7 +994,6 @@ const styles = StyleSheet.create({
   },
   statValue: { color: "white", fontSize: 16, fontWeight: "900" },
 
-  // Tags
   tagRow: {
     flexDirection: "row",
     gap: 10,
