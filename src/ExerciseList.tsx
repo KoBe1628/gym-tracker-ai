@@ -22,6 +22,7 @@ import ProgressChart from "./ProgressChart";
 import RestTimer from "./RestTimer";
 import WeeklyTarget from "./WeeklyTarget";
 import WorkoutSummary from "./WorkoutSummary";
+import Sparkline from "./Sparkline"; // 📈 NEW IMPORT
 import { feedback } from "./lib/haptics";
 import PlateCalculator from "./PlateCalculator";
 import ConfettiCannon from "react-native-confetti-cannon";
@@ -77,7 +78,8 @@ export default function ExerciseList() {
 
   // 🏆 PR & Recovery Logic
   const [currentPR, setCurrentPR] = useState(0);
-  const [recoveryMap, setRecoveryMap] = useState<Record<number, string>>({}); // 🔋 MuscleID -> Date String
+  const [recoveryMap, setRecoveryMap] = useState<Record<number, string>>({});
+  const [trendData, setTrendData] = useState<number[]>([]); // 📈 TREND STATE
 
   // ⚙️ Logic State
   const [activeRoutineId, setActiveRoutineId] = useState<number | null>(null);
@@ -93,7 +95,7 @@ export default function ExerciseList() {
 
   useEffect(() => {
     fetchData();
-    fetchRecoveryStatus(); // 🔋 Trigger the smart coach
+    fetchRecoveryStatus();
   }, []);
 
   async function fetchData() {
@@ -109,28 +111,19 @@ export default function ExerciseList() {
     setMusclesList(mData || []);
   }
 
-  // 🔋 SMART COACH: Check for tired muscles
+  // 🔋 SMART COACH
   async function fetchRecoveryStatus() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-
-    // Look back 48 hours
     const twoDaysAgo = new Date();
     twoDaysAgo.setHours(twoDaysAgo.getHours() - 48);
 
-    // Fetch logs + the muscle associated with that exercise
     const { data: logs } = await supabase
       .from("workout_logs")
       .select(
-        `
-            created_at,
-            exercises!inner (
-                muscles ( id )
-            ),
-            workouts!inner ( user_id )
-        `
+        `created_at, exercises!inner(muscles(id)), workouts!inner(user_id)`
       )
       .eq("workouts.user_id", user.id)
       .gte("created_at", twoDaysAgo.toISOString())
@@ -140,19 +133,14 @@ export default function ExerciseList() {
       const map: Record<number, string> = {};
       logs.forEach((log: any) => {
         const mId = log.exercises?.muscles?.id;
-        if (mId && !map[mId]) {
-          // Only store the *most recent* time for this muscle
-          map[mId] = log.created_at;
-        }
+        if (mId && !map[mId]) map[mId] = log.created_at;
       });
       setRecoveryMap(map);
     }
   }
 
-  // 🔋 HELPER: Get Status Badge
   const getRecoveryBadge = (muscleId: number | undefined) => {
     if (!muscleId || !recoveryMap[muscleId]) return null;
-
     const lastHit = new Date(recoveryMap[muscleId]);
     const now = new Date();
     const diffHours = (now.getTime() - lastHit.getTime()) / (1000 * 60 * 60);
@@ -196,7 +184,7 @@ export default function ExerciseList() {
         </View>
       );
     }
-    return null; // > 48h means Fresh (No badge)
+    return null;
   };
 
   async function fetchPersonalRecord(exerciseId: number) {
@@ -210,6 +198,28 @@ export default function ExerciseList() {
 
     if (data) setCurrentPR(data.weight_kg);
     else setCurrentPR(0);
+  }
+
+  // 📈 FETCH TREND DATA
+  async function fetchTrendData(exerciseId: number) {
+    const { data } = await supabase
+      .from("workout_logs")
+      .select("weight_kg, reps, created_at")
+      .eq("exercise_id", exerciseId)
+      .order("created_at", { ascending: false }) // Newest first
+      .limit(10);
+
+    if (data && data.length > 0) {
+      const oneRMs = data.map((log: any) => {
+        const w = log.weight_kg || 0;
+        const r = log.reps || 0;
+        if (r === 0) return 0;
+        return w * (1 + r / 30); // Epley Formula
+      });
+      setTrendData(oneRMs.reverse()); // Oldest -> Newest
+    } else {
+      setTrendData([]);
+    }
   }
 
   async function createExercise() {
@@ -261,7 +271,6 @@ export default function ExerciseList() {
 
   async function finishWorkout() {
     if (!workoutId) return;
-
     Alert.alert("Finish Workout?", "Are you done crushing it?", [
       { text: "Keep Pumping", style: "cancel" },
       {
@@ -319,6 +328,10 @@ export default function ExerciseList() {
     setCurrentPR(0);
     fetchPersonalRecord(exercise.id);
 
+    // 📈 Initialize Trend
+    setTrendData([]);
+    fetchTrendData(exercise.id);
+
     setModalVisible(true);
   }
 
@@ -357,9 +370,8 @@ export default function ExerciseList() {
       feedback.light();
       setModalVisible(false);
       setShowTimer(true);
-
-      // 🔋 Update recovery status instantly after logging
       fetchRecoveryStatus();
+      fetchTrendData(selectedExercise!.id); // Update trend immediately
     } else {
       Alert.alert("Error", error.message);
     }
@@ -503,8 +515,6 @@ export default function ExerciseList() {
             >
               <View>
                 <Text style={styles.cardTitle}>{item.name}</Text>
-
-                {/* 🔋 ROW: Subtitle + Recovery Badge */}
                 <View
                   style={{
                     flexDirection: "row",
@@ -517,7 +527,6 @@ export default function ExerciseList() {
                     {item.muscles?.name.toUpperCase()}
                     {item.is_bodyweight ? " • BODYWEIGHT" : ""}
                   </Text>
-                  {/* Badge Renders Here */}
                   {getRecoveryBadge(item.muscles?.id)}
                 </View>
               </View>
@@ -658,8 +667,37 @@ export default function ExerciseList() {
           style={styles.modalOverlay}
         >
           <View style={styles.modalView}>
+            {/* 🔄 MODIFIED HEADER WITH SPARKLINE */}
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{selectedExercise?.name}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>{selectedExercise?.name}</Text>
+                {trendData.length > 1 ? (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginTop: 4,
+                    }}
+                  >
+                    <Sparkline data={trendData} />
+                    <Text
+                      style={{
+                        color: "#bef264",
+                        fontSize: 10,
+                        fontWeight: "bold",
+                        marginLeft: 8,
+                      }}
+                    >
+                      TREND
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={{ color: "#666", fontSize: 12, marginTop: 2 }}>
+                    Let's build some data.
+                  </Text>
+                )}
+              </View>
+
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Ionicons name="close-circle" size={28} color="#666" />
               </TouchableOpacity>
