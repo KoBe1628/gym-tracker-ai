@@ -29,7 +29,7 @@ import ConfettiCannon from "react-native-confetti-cannon";
 type Exercise = {
   id: number;
   name: string;
-  is_bodyweight: boolean; // 🆕 New Flag
+  is_bodyweight: boolean;
   muscles: {
     id: number;
     name: string;
@@ -56,8 +56,7 @@ const AVAILABLE_TAGS = ["Warm Up", "Failure", "Drop Set"];
 
 export default function ExerciseList() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [musclesList, setMusclesList] = useState<Muscle[]>([]); // 🆕 For the creator
-
+  const [musclesList, setMusclesList] = useState<Muscle[]>([]);
   const [workoutId, setWorkoutId] = useState<number | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(
@@ -76,8 +75,9 @@ export default function ExerciseList() {
   const [newMuscleId, setNewMuscleId] = useState<number | null>(null);
   const [isBodyweight, setIsBodyweight] = useState(false);
 
-  // 🏆 PR Logic
+  // 🏆 PR & Recovery Logic
   const [currentPR, setCurrentPR] = useState(0);
+  const [recoveryMap, setRecoveryMap] = useState<Record<number, string>>({}); // 🔋 MuscleID -> Date String
 
   // ⚙️ Logic State
   const [activeRoutineId, setActiveRoutineId] = useState<number | null>(null);
@@ -93,24 +93,112 @@ export default function ExerciseList() {
 
   useEffect(() => {
     fetchData();
+    fetchRecoveryStatus(); // 🔋 Trigger the smart coach
   }, []);
 
   async function fetchData() {
-    // 1. Fetch Exercises (Now includes created_by via RLS)
     const { data: exData } = await supabase
       .from("exercises")
       .select(`id, name, is_bodyweight, muscles ( id, name )`)
-      .order("name"); // Alphabetical
+      .order("name");
 
     setExercises(exData as any);
     setOriginalExercises(exData as any);
 
-    // 2. Fetch Muscles (For the Creator Dropdown)
     const { data: mData } = await supabase.from("muscles").select("id, name");
     setMusclesList(mData || []);
   }
 
-  // 🏆 Fetch PR
+  // 🔋 SMART COACH: Check for tired muscles
+  async function fetchRecoveryStatus() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Look back 48 hours
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setHours(twoDaysAgo.getHours() - 48);
+
+    // Fetch logs + the muscle associated with that exercise
+    const { data: logs } = await supabase
+      .from("workout_logs")
+      .select(
+        `
+            created_at,
+            exercises!inner (
+                muscles ( id )
+            ),
+            workouts!inner ( user_id )
+        `
+      )
+      .eq("workouts.user_id", user.id)
+      .gte("created_at", twoDaysAgo.toISOString())
+      .order("created_at", { ascending: false });
+
+    if (logs) {
+      const map: Record<number, string> = {};
+      logs.forEach((log: any) => {
+        const mId = log.exercises?.muscles?.id;
+        if (mId && !map[mId]) {
+          // Only store the *most recent* time for this muscle
+          map[mId] = log.created_at;
+        }
+      });
+      setRecoveryMap(map);
+    }
+  }
+
+  // 🔋 HELPER: Get Status Badge
+  const getRecoveryBadge = (muscleId: number | undefined) => {
+    if (!muscleId || !recoveryMap[muscleId]) return null;
+
+    const lastHit = new Date(recoveryMap[muscleId]);
+    const now = new Date();
+    const diffHours = (now.getTime() - lastHit.getTime()) / (1000 * 60 * 60);
+
+    if (diffHours < 24) {
+      return (
+        <View
+          style={[
+            styles.recoveryBadge,
+            { backgroundColor: "#7f1d1d", borderColor: "#ef4444" },
+          ]}
+        >
+          <Ionicons
+            name="battery-dead"
+            size={10}
+            color="#ef4444"
+            style={{ marginRight: 4 }}
+          />
+          <Text style={[styles.recoveryText, { color: "#ef4444" }]}>
+            RECOVERING
+          </Text>
+        </View>
+      );
+    } else if (diffHours < 48) {
+      return (
+        <View
+          style={[
+            styles.recoveryBadge,
+            { backgroundColor: "#422006", borderColor: "#eab308" },
+          ]}
+        >
+          <Ionicons
+            name="battery-half"
+            size={10}
+            color="#eab308"
+            style={{ marginRight: 4 }}
+          />
+          <Text style={[styles.recoveryText, { color: "#eab308" }]}>
+            REBUILDING
+          </Text>
+        </View>
+      );
+    }
+    return null; // > 48h means Fresh (No badge)
+  };
+
   async function fetchPersonalRecord(exerciseId: number) {
     const { data } = await supabase
       .from("workout_logs")
@@ -124,14 +212,12 @@ export default function ExerciseList() {
     else setCurrentPR(0);
   }
 
-  // 🧪 CREATE CUSTOM EXERCISE
   async function createExercise() {
     if (!newName || !newMuscleId)
       return Alert.alert(
         "Missing Info",
         "Please add a name and pick a muscle."
       );
-
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -142,7 +228,7 @@ export default function ExerciseList() {
         name: newName,
         target_muscle_id: newMuscleId,
         is_bodyweight: isBodyweight,
-        created_by: user.id, // 🔒 Links to YOU only
+        created_by: user.id,
       },
     ]);
 
@@ -154,7 +240,7 @@ export default function ExerciseList() {
       setNewName("");
       setIsBodyweight(false);
       setNewMuscleId(null);
-      fetchData(); // Refresh list
+      fetchData();
     }
   }
 
@@ -186,11 +272,8 @@ export default function ExerciseList() {
             .update({ ended_at: new Date().toISOString() })
             .eq("id", workoutId);
 
-          if (!error) {
-            setShowSummary(true);
-          } else {
-            Alert.alert("Error", error.message);
-          }
+          if (!error) setShowSummary(true);
+          else Alert.alert("Error", error.message);
         },
       },
     ]);
@@ -240,12 +323,9 @@ export default function ExerciseList() {
   }
 
   async function logSet() {
-    // Validate: Weight is only required if NOT bodyweight (allow 0 for bodyweight)
     if ((!weight && !selectedExercise?.is_bodyweight) || !reps)
       return Alert.alert("Error", "Enter data");
-
     const inputWeight = weight ? parseFloat(weight) : 0;
-
     const isNewRecord = currentPR > 0 && inputWeight > currentPR;
 
     const { error } = await supabase.from("workout_logs").insert([
@@ -262,7 +342,6 @@ export default function ExerciseList() {
     if (!error) {
       setNote("");
       setTags([]);
-
       if (isNewRecord) {
         setShowConfetti(true);
         Alert.alert(
@@ -273,14 +352,14 @@ export default function ExerciseList() {
       } else if (inputWeight >= 100 || parseInt(reps) >= 12) {
         setShowConfetti(true);
       }
-
-      if (showConfetti || isNewRecord) {
+      if (showConfetti || isNewRecord)
         setTimeout(() => setShowConfetti(false), 5000);
-      }
-
       feedback.light();
       setModalVisible(false);
       setShowTimer(true);
+
+      // 🔋 Update recovery status instantly after logging
+      fetchRecoveryStatus();
     } else {
       Alert.alert("Error", error.message);
     }
@@ -294,7 +373,6 @@ export default function ExerciseList() {
     if (!error) Alert.alert("Added!", `${exercise.name} added to routine.`);
   }
 
-  // 🧮 1RM Calc
   const getOneRepMax = () => {
     const w = parseFloat(weight) || 0;
     const r = parseFloat(reps) || 0;
@@ -304,7 +382,6 @@ export default function ExerciseList() {
   };
   const estimatedMax = getOneRepMax();
 
-  // 🔍 Filter
   const filteredExercises = exercises.filter((ex) => {
     const matchesSearch =
       ex.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -323,7 +400,6 @@ export default function ExerciseList() {
             <WeeklyTarget />
             <MuscleHeatmap />
 
-            {/* Search */}
             <View style={styles.searchContainer}>
               <Ionicons
                 name="search"
@@ -357,7 +433,6 @@ export default function ExerciseList() {
               }}
             />
 
-            {/* Edit Banner / Header */}
             {activeRoutineId ? (
               <View style={styles.editBanner}>
                 <View>
@@ -428,10 +503,23 @@ export default function ExerciseList() {
             >
               <View>
                 <Text style={styles.cardTitle}>{item.name}</Text>
-                <Text style={styles.cardSubtitle}>
-                  {item.muscles?.name.toUpperCase()}
-                  {item.is_bodyweight ? " • BODYWEIGHT" : ""}
-                </Text>
+
+                {/* 🔋 ROW: Subtitle + Recovery Badge */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginTop: 4,
+                    gap: 8,
+                  }}
+                >
+                  <Text style={styles.cardSubtitle}>
+                    {item.muscles?.name.toUpperCase()}
+                    {item.is_bodyweight ? " • BODYWEIGHT" : ""}
+                  </Text>
+                  {/* Badge Renders Here */}
+                  {getRecoveryBadge(item.muscles?.id)}
+                </View>
               </View>
               <View
                 style={[
@@ -456,7 +544,6 @@ export default function ExerciseList() {
             </TouchableOpacity>
           );
         }}
-        // 👇 CREATE BUTTON AT BOTTOM
         ListFooterComponent={
           <TouchableOpacity
             style={styles.createButton}
@@ -480,25 +567,21 @@ export default function ExerciseList() {
         animationType="slide"
         transparent={true}
       >
-        {/* 1. The Wrapper IS the KeyboardAvoidingView */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
-          {/* 2. The Card is just a normal View now (No absolute positioning) */}
           <View style={styles.creatorModalView}>
             <Text style={styles.modalTitle}>THE LAB 🧪</Text>
             <Text style={{ color: "#888", marginBottom: 20 }}>
               Create a custom exercise for your library.
             </Text>
 
-            {/* 3. ScrollView handles the content if screen is small */}
             <ScrollView
               contentContainerStyle={{ paddingBottom: 20 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              {/* Name Input */}
               <Text style={styles.label}>NAME:</Text>
               <TextInput
                 placeholder="Ex: Super Press"
@@ -508,7 +591,6 @@ export default function ExerciseList() {
                 onChangeText={setNewName}
               />
 
-              {/* Bodyweight Toggle */}
               <View style={styles.switchRow}>
                 <Text style={{ color: "white", fontWeight: "bold" }}>
                   Is Bodyweight?
@@ -521,7 +603,6 @@ export default function ExerciseList() {
                 />
               </View>
 
-              {/* Muscle Selector */}
               <Text style={styles.label}>PRIMARY MUSCLE:</Text>
               <ScrollView
                 horizontal
@@ -557,7 +638,6 @@ export default function ExerciseList() {
                 <Text style={styles.saveButtonText}>CREATE EXERCISE</Text>
               </TouchableOpacity>
 
-              {/* Cancel Button */}
               <TouchableOpacity
                 onPress={() => setCreateModalVisible(false)}
                 style={{ marginTop: 10, padding: 15, alignItems: "center" }}
@@ -625,7 +705,6 @@ export default function ExerciseList() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
               >
-                {/* Inputs: Placeholder changes based on Bodyweight flag */}
                 <View style={styles.inputRow}>
                   <TextInput
                     placeholder={
@@ -649,7 +728,6 @@ export default function ExerciseList() {
                   />
                 </View>
 
-                {/* Stats & Tools */}
                 <View style={styles.statsRow}>
                   {weight && reps ? (
                     <View style={styles.statChip}>
@@ -668,7 +746,6 @@ export default function ExerciseList() {
                   )}
                 </View>
 
-                {/* 🧠 SMART LOGIC: Hide Plates if Bodyweight */}
                 {!selectedExercise?.is_bodyweight && weight ? (
                   <PlateCalculator weight={parseFloat(weight)} />
                 ) : null}
@@ -791,13 +868,27 @@ const styles = StyleSheet.create({
     paddingTop: 50,
   },
 
-  // --- MODAL LAYOUT FIXES (The Critical Part) ---
+  // --- RECOVERY BADGES ---
+  recoveryBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  recoveryText: {
+    fontSize: 10,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+  },
+
+  // --- MODAL LAYOUT ---
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "flex-end", // This pushes the view to the bottom naturally
+    justifyContent: "flex-end",
   },
-
   creatorModalView: {
     backgroundColor: "#18181b",
     width: "100%",
@@ -805,10 +896,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 30,
     paddingBottom: 40,
-    maxHeight: "85%", // Let it grow if needed, but don't force fixed height
-    // REMOVED: position: 'absolute' and bottom: 0 (This was the bug!)
+    maxHeight: "85%",
   },
-
   creatorInput: {
     backgroundColor: "#27272a",
     color: "white",
@@ -820,7 +909,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     width: "100%",
   },
-
   label: {
     color: "#666",
     fontSize: 10,
@@ -829,7 +917,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     alignSelf: "flex-start",
   },
-  // ----------------------------------------------
 
   // Header & Search
   actionRow: {
@@ -921,12 +1008,7 @@ const styles = StyleSheet.create({
     borderColor: "#333",
   },
   cardTitle: { color: "white", fontSize: 16, fontWeight: "bold" },
-  cardSubtitle: {
-    color: THEME.textDim,
-    fontSize: 12,
-    marginTop: 4,
-    letterSpacing: 1,
-  },
+  cardSubtitle: { color: THEME.textDim, fontSize: 12, letterSpacing: 1 },
   iconContainer: {
     width: 32,
     height: 32,
@@ -935,7 +1017,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // Logger Modal (The Standard One)
+  // Logger Modal
   modalView: {
     backgroundColor: "#18181b",
     borderTopLeftRadius: 24,
