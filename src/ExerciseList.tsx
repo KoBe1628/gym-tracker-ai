@@ -26,6 +26,8 @@ import Sparkline from "./Sparkline"; // 📈 NEW IMPORT
 import { feedback } from "./lib/haptics";
 import PlateCalculator from "./PlateCalculator";
 import ConfettiCannon from "react-native-confetti-cannon";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import InventoryModal from "./InventoryModal";
 
 type Exercise = {
   id: number;
@@ -93,10 +95,25 @@ export default function ExerciseList() {
   // 🗂️ Tab State
   const [activeTab, setActiveTab] = useState<"log" | "history">("log");
 
+  // ⚙️ Inventory Settings
+  const [showInventory, setShowInventory] = useState(false);
+  const [userBarWeight, setUserBarWeight] = useState(20);
+  const [userPlates, setUserPlates] = useState([25, 20, 15, 10, 5, 2.5, 1.25]);
+
   useEffect(() => {
+    loadInventorySettings();
     fetchData();
     fetchRecoveryStatus();
   }, []);
+
+  const loadInventorySettings = async () => {
+    try {
+      const bar = await AsyncStorage.getItem("barWeight");
+      const plates = await AsyncStorage.getItem("availablePlates");
+      if (bar) setUserBarWeight(parseFloat(bar));
+      if (plates) setUserPlates(JSON.parse(plates));
+    } catch (e) {}
+  };
 
   async function fetchData() {
     const { data: exData } = await supabase
@@ -467,6 +484,13 @@ export default function ExerciseList() {
                 <Text style={styles.headerTitle}>
                   {workoutId ? "🔥 CRUSH IT" : "EXERCISE LIST"}
                 </Text>
+                {/* ⚙️ SETTINGS BUTTON */}
+                <TouchableOpacity
+                  onPress={() => setShowInventory(true)}
+                  style={{ padding: 5 }}
+                >
+                  <Ionicons name="settings-sharp" size={20} color="#666" />
+                </TouchableOpacity>
 
                 {workoutId ? (
                   <TouchableOpacity
@@ -785,7 +809,11 @@ export default function ExerciseList() {
                 </View>
 
                 {!selectedExercise?.is_bodyweight && weight ? (
-                  <PlateCalculator weight={parseFloat(weight)} />
+                  <PlateCalculator
+                    weight={parseFloat(weight)}
+                    barWeight={userBarWeight}
+                    availablePlates={userPlates}
+                  />
                 ) : null}
 
                 {selectedExercise?.is_bodyweight && (
@@ -893,6 +921,15 @@ export default function ExerciseList() {
         visible={showSummary}
         workoutId={workoutId}
         onClose={closeSummary}
+      />
+
+      <InventoryModal
+        visible={showInventory}
+        onClose={() => setShowInventory(false)}
+        onSave={(bar, plates) => {
+          setUserBarWeight(bar);
+          setUserPlates(plates);
+        }}
       />
     </View>
   );
