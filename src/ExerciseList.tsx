@@ -28,6 +28,7 @@ import PlateCalculator from "./PlateCalculator";
 import ConfettiCannon from "react-native-confetti-cannon";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import InventoryModal from "./InventoryModal";
+import StreakCounter from "./StreakCounter";
 
 type Exercise = {
   id: number;
@@ -480,17 +481,36 @@ export default function ExerciseList() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.actionRow}>
-                <Text style={styles.headerTitle}>
-                  {workoutId ? "🔥 CRUSH IT" : "EXERCISE LIST"}
-                </Text>
-                {/* ⚙️ SETTINGS BUTTON */}
-                <TouchableOpacity
-                  onPress={() => setShowInventory(true)}
-                  style={{ padding: 5 }}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
                 >
-                  <Ionicons name="settings-sharp" size={20} color="#666" />
-                </TouchableOpacity>
+                  <Text style={styles.headerTitle}>
+                    {workoutId ? "🔥 CRUSH IT" : "EXERCISE LIST"}
+                  </Text>
+
+                  {/* ⚙️ SETTINGS */}
+                  <TouchableOpacity
+                    onPress={() => setShowInventory(true)}
+                    style={{ padding: 5 }}
+                  >
+                    <Ionicons name="settings-sharp" size={20} color="#666" />
+                  </TouchableOpacity>
+
+                  {/* 🔥 STREAK (New!) */}
+                  <StreakCounter />
+                </View>
 
                 {workoutId ? (
                   <TouchableOpacity
