@@ -481,64 +481,86 @@ export default function ExerciseList() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  width: "100%",
-                }}
-              >
+              /* 🟢 UPDATED HEADER LAYOUT */
+              <View>
+                {/* ROW 1: Title & Icons */}
                 <View
                   style={{
                     flexDirection: "row",
+                    justifyContent: "space-between",
                     alignItems: "center",
-                    gap: 10,
+                    marginBottom: 15, // Add space between title and button
+                    marginTop: 10,
                   }}
                 >
-                  <Text style={styles.headerTitle}>
-                    {workoutId ? "🔥 CRUSH IT" : "EXERCISE LIST"}
-                  </Text>
-
-                  {/* ⚙️ SETTINGS */}
-                  <TouchableOpacity
-                    onPress={() => setShowInventory(true)}
-                    style={{ padding: 5 }}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
                   >
-                    <Ionicons name="settings-sharp" size={20} color="#666" />
-                  </TouchableOpacity>
+                    <Text style={styles.headerTitle}>
+                      {workoutId ? "🔥 CRUSH IT" : "EXERCISE LIST"}
+                    </Text>
 
-                  {/* 🔥 STREAK (New!) */}
+                    {/* ⚙️ SETTINGS */}
+                    <TouchableOpacity
+                      onPress={() => setShowInventory(true)}
+                      style={{ padding: 5 }}
+                    >
+                      <Ionicons name="settings-sharp" size={20} color="#666" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* 🔥 STREAK (Pushed to the right) */}
                   <StreakCounter />
                 </View>
 
+                {/* ROW 2: The Action Button (Full Width) */}
                 {workoutId ? (
                   <TouchableOpacity
                     style={[
                       styles.startButton,
-                      { backgroundColor: THEME.danger },
+                      {
+                        backgroundColor: THEME.danger,
+                        width: "100%",
+                        alignItems: "center",
+                      }, // Full width
                     ]}
                     onPress={finishWorkout}
                   >
-                    <Text style={[styles.startButtonText, { color: "white" }]}>
-                      FINISH
+                    <Text
+                      style={[
+                        styles.startButtonText,
+                        { color: "white", fontSize: 14 },
+                      ]}
+                    >
+                      FINISH WORKOUT
                     </Text>
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity
-                    style={styles.startButton}
+                    style={[
+                      styles.startButton,
+                      { width: "100%", alignItems: "center" }, // Full width
+                    ]}
                     onPress={startWorkout}
                   >
-                    <Text style={styles.startButtonText}>START WORKOUT</Text>
+                    <Text style={[styles.startButtonText, { fontSize: 14 }]}>
+                      START WORKOUT
+                    </Text>
                   </TouchableOpacity>
                 )}
 
+                {/* ROW 3: Show All Link */}
                 {exercises.length < originalExercises.length && (
                   <TouchableOpacity
                     onPress={() => setExercises(originalExercises)}
+                    style={{ alignItems: "center", marginTop: 10 }}
                   >
                     <Text style={{ color: "#666", fontSize: 12 }}>
-                      Show All
+                      Show All Exercises
                     </Text>
                   </TouchableOpacity>
                 )}
