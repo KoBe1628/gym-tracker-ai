@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Modal,
   ActivityIndicator,
-  ScrollView,
 } from "react-native";
 import { supabase } from "./lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
@@ -56,14 +55,24 @@ export default function WorkoutSummary({
       .eq("workout_id", workoutId);
 
     if (workout && logs) {
-      // A. Calculate Duration
+      // 🕒 A. Calculate Duration (With Sanity Check)
       const start = new Date(workout.started_at).getTime();
-      const end = new Date(workout.ended_at || new Date()).getTime(); // Fallback if not yet synced
+      const end = new Date(workout.ended_at || new Date()).getTime();
       const diffMs = end - start;
-      const minutes = Math.floor(diffMs / 60000);
-      const hours = Math.floor(minutes / 60);
-      const displayTime =
-        hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+
+      let displayTime = "0m";
+
+      // 🚨 SANITY CHECK: If > 12 hours, assume user forgot to finish.
+      if (diffMs > 1000 * 60 * 60 * 12) {
+        displayTime = "Not Recorded";
+      } else {
+        const totalMinutes = Math.floor(diffMs / 60000);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+
+        if (hours > 0) displayTime = `${hours}h ${minutes}m`;
+        else displayTime = `${minutes}m`;
+      }
 
       // B. Calculate Volume & Sets
       let vol = 0;
@@ -105,7 +114,14 @@ export default function WorkoutSummary({
               <View style={styles.grid}>
                 <View style={styles.statBox}>
                   <Text style={styles.label}>DURATION</Text>
-                  <Text style={styles.value}>{stats.duration}</Text>
+                  <Text
+                    style={[
+                      styles.value,
+                      { fontSize: stats.duration.length > 5 ? 14 : 20 },
+                    ]}
+                  >
+                    {stats.duration}
+                  </Text>
                 </View>
                 <View style={styles.statBox}>
                   <Text style={styles.label}>SETS</Text>
@@ -207,7 +223,7 @@ const styles = StyleSheet.create({
     marginVertical: 25,
     borderStyle: "dashed",
     borderWidth: 1,
-    borderColor: "#444", // simple dashed simulation
+    borderColor: "#444",
   },
   footerText: {
     color: "#bef264",

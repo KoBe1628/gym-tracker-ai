@@ -14,6 +14,7 @@ import { supabase } from "./lib/supabase";
 type PR = {
   exerciseName: string;
   weight: number;
+  reps: number; // 🆕 Added Reps
   date: string;
   muscle: string;
 };
@@ -45,21 +46,21 @@ export default function PersonalRecords({
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) return; // Safety check
+    if (!user) return;
 
-    // 1. FIX: Added 'workouts!inner(user_id)' to the select string
     const { data: logs, error } = await supabase
       .from("workout_logs")
       .select(
         `
         weight_kg, 
+        reps,
         created_at,
         exercises ( id, name, muscles ( name ) ),
         workouts!inner ( user_id )
       `
       )
-      .eq("workouts.user_id", user.id) // Now this filter works because of the line above
-      .order("weight_kg", { ascending: false });
+      .eq("workouts.user_id", user.id)
+      .order("weight_kg", { ascending: false }); // Biggest weight first
 
     if (error) {
       console.error("Error fetching PRs:", error);
@@ -72,7 +73,7 @@ export default function PersonalRecords({
       return;
     }
 
-    // 2. Process: Keep only the FIRST occurrence of each exercise (The Max)
+    // Process: Keep only the FIRST occurrence (The Max)
     const uniqueMap = new Set();
     const prList: PR[] = [];
 
@@ -80,13 +81,12 @@ export default function PersonalRecords({
       const exName = log.exercises?.name;
       if (!exName) return;
 
-      // Since we ordered by Weight DESC, the first time we see an exercise,
-      // it MUST be the heaviest lift.
       if (!uniqueMap.has(exName)) {
         uniqueMap.add(exName);
         prList.push({
           exerciseName: exName,
           weight: log.weight_kg,
+          reps: log.reps, // 🆕 Capture Reps
           date: new Date(log.created_at).toLocaleDateString(),
           muscle: log.exercises?.muscles?.name || "Other",
         });
@@ -124,17 +124,24 @@ export default function PersonalRecords({
             keyExtractor={(item) => item.exerciseName}
             contentContainerStyle={{ padding: 20, paddingBottom: 50 }}
             renderItem={({ item }) => (
-              <View style={styles.card}>
-                <View>
+              <View style={styles.trophyCard}>
+                {/* 1. Gold Icon */}
+                <View style={styles.iconCircle}>
+                  <Ionicons name="trophy" size={20} color="#FFD700" />
+                </View>
+
+                {/* 2. Info */}
+                <View style={{ flex: 1, marginLeft: 15 }}>
                   <Text style={styles.exName}>{item.exerciseName}</Text>
                   <Text style={styles.date}>
                     {item.muscle.toUpperCase()} • {item.date}
                   </Text>
                 </View>
-                <View style={styles.badge}>
-                  <Text style={styles.weight}>
-                    {item.weight} <Text style={{ fontSize: 12 }}>KG</Text>
-                  </Text>
+
+                {/* 3. The Numbers */}
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={styles.weight}>{item.weight}kg</Text>
+                  <Text style={styles.reps}>x {item.reps} reps</Text>
                 </View>
               </View>
             )}
@@ -164,28 +171,37 @@ const styles = StyleSheet.create({
   title: { color: "white", fontSize: 20, fontWeight: "900", letterSpacing: 1 },
   closeBtn: { backgroundColor: THEME.primary, borderRadius: 20, padding: 5 },
 
-  card: {
+  // 🏆 NEW CARD STYLES
+  trophyCard: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: THEME.card,
-    padding: 20,
+    backgroundColor: "#27272a",
+    padding: 15,
     borderRadius: 16,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: "#333",
   },
-  exName: { color: "white", fontSize: 16, fontWeight: "bold", marginBottom: 4 },
-  date: { color: THEME.textDim, fontSize: 12, fontWeight: "bold" },
-
-  badge: {
-    backgroundColor: "#333",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 215, 0, 0.1)", // Gold tint
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "#444",
+    borderColor: "rgba(255, 215, 0, 0.2)",
   },
-  weight: { color: THEME.primary, fontSize: 18, fontWeight: "900" },
+  exName: { color: "white", fontSize: 16, fontWeight: "bold", marginBottom: 2 },
+  date: {
+    color: THEME.textDim,
+    fontSize: 10,
+    fontWeight: "bold",
+    letterSpacing: 1,
+  },
+
+  weight: { color: THEME.primary, fontSize: 20, fontWeight: "900" },
+  reps: { color: "#888", fontSize: 12, fontWeight: "bold" },
+
   emptyText: { color: "#666", textAlign: "center", marginTop: 50 },
 });

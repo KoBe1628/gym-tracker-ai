@@ -221,22 +221,36 @@ export default function ExerciseList() {
     else setCurrentPR(0);
   }
 
-  // 📈 FETCH TREND DATA
+  // 📈 FETCH TREND DATA (Now Smarter 🧠)
   async function fetchTrendData(exerciseId: number) {
     const { data } = await supabase
       .from("workout_logs")
-      .select("weight_kg, reps, created_at")
+      .select("weight_kg, reps, created_at, tags") // 👈 Make sure to fetch 'tags'
       .eq("exercise_id", exerciseId)
-      .order("created_at", { ascending: false }) // Newest first
-      .limit(10);
+      .order("created_at", { ascending: false })
+      .limit(20); // Fetch more items initially, then filter
 
     if (data && data.length > 0) {
-      const oneRMs = data.map((log: any) => {
+      // 1. FILTER OUT WARM UPS
+      const cleanLogs = data.filter((log: any) => {
+        // If tags exist, check if 'Warm Up' is NOT present
+        if (log.tags && Array.isArray(log.tags)) {
+          return !log.tags.includes("Warm Up");
+        }
+        return true; // Keep logs with no tags
+      });
+
+      // 2. Take the top 10 *valid* logs
+      const recentValidLogs = cleanLogs.slice(0, 10);
+
+      // 3. Calculate 1RM
+      const oneRMs = recentValidLogs.map((log: any) => {
         const w = log.weight_kg || 0;
         const r = log.reps || 0;
         if (r === 0) return 0;
         return w * (1 + r / 30); // Epley Formula
       });
+
       setTrendData(oneRMs.reverse()); // Oldest -> Newest
     } else {
       setTrendData([]);
