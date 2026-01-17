@@ -101,6 +101,9 @@ export default function ExerciseList() {
   const [userBarWeight, setUserBarWeight] = useState(20);
   const [userPlates, setUserPlates] = useState([25, 20, 15, 10, 5, 2.5, 1.25]);
 
+  // Ghost Input / Prefill
+  const [isGhost, setIsGhost] = useState(false); // 👻 Is this pre-filled data?
+
   useEffect(() => {
     loadInventorySettings();
     fetchData();
@@ -331,24 +334,50 @@ export default function ExerciseList() {
     startWorkout();
   }
 
+  // 👻 GHOST LOGIC: Fetch last set
+  async function fetchLastSet(exerciseId: number) {
+    const { data } = await supabase
+      .from("workout_logs")
+      .select("weight_kg, reps")
+      .eq("exercise_id", exerciseId)
+      .order("created_at", { ascending: false }) // Newest first
+      .limit(1)
+      .single();
+
+    if (data) {
+      setWeight(data.weight_kg.toString());
+      setReps(data.reps.toString());
+      setIsGhost(true); // Tell UI this is a ghost value
+    } else {
+      setIsGhost(false);
+    }
+  }
+
   function openLogModal(exercise: Exercise) {
     if (!workoutId) {
       Alert.alert("❄️ Cold Muscles?", "Start a workout first to warm up.");
       return;
     }
     setSelectedExercise(exercise);
+
+    // 1. Reset everything first
     setWeight("");
     setReps("");
     setNote("");
     setTags([]);
+    setIsGhost(false); // Reset ghost status
+
     setActiveTab("log");
 
+    // 2. Fetch Context Data
     setCurrentPR(0);
     fetchPersonalRecord(exercise.id);
 
-    // 📈 Initialize Trend
     setTrendData([]);
     fetchTrendData(exercise.id);
+
+    // 3. 👻 Summon the Ghost (Pre-fill inputs)
+    fetchLastSet(exercise.id);
 
     setModalVisible(true);
   }

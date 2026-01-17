@@ -16,6 +16,7 @@ import PersonalRecords from "./PersonalRecords";
 import { Ionicons } from "@expo/vector-icons";
 import SymmetryCard from "./SymmetryCard";
 import WorkoutSummary from "./WorkoutSummary";
+import IronRank from "./IronRank";
 
 const THEME = {
   bg: "#121212",
@@ -201,6 +202,9 @@ export default function Profile() {
         </TouchableOpacity>
 
         <BadgeGrid stats={badgeStats} />
+
+        {/* 🛡️ NEW RPG RANK CARD */}
+        <IronRank />
 
         {/* 🗓️ CALENDAR SECTION */}
         <Text style={styles.sectionTitle}>CONSISTENCY</Text>
