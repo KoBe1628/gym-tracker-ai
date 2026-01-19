@@ -1,6 +1,6 @@
 # 🏋️‍♂️ AI-Powered Workout Tracker
 
-A smart fitness companion built with **React Native** and **Supabase** that tracks progress, visualizes muscle engagement, and analyzes strength trends.
+A smart fitness companion built with **React Native** and **Supabase** that tracks progress, visualizes muscle engagement, and analyzes strength trends with RPG-style gamification.
 
 ![App Demo]
 
@@ -8,16 +8,26 @@ https://github.com/user-attachments/assets/ed34540c-bf24-4428-89e6-64ab5b0062e5
 
 ## 🚀 Key Features
 
-- **Smart Logging & Tabbed UI:** A clean, modal-based interface separating "Log Inputs" from "History Charts," featuring auto-scroll support and keyboard handling.
-- **Physique Symmetry Analysis:** An intelligent "Push vs. Pull" ratio visualizer that analyzes training history to detect muscle imbalances and prevent injury.
-- **Contextual Tagging System:** Users can tag sets as `[Failure]`, `[Drop Set]`, or `[Warm Up]` to track fatigue and intensity alongside raw volume.
-- **Gamified Progress:**
-  - **Weekly Volume Vault:** A dynamic progress bar tracking total tonnage lifted per week.
-  - **PR Detector:** Intelligent alerts and confetti celebrations when a user breaks a personal record.
-  - **"Level Complete" Summaries:** A receipt-style popup summarizing duration, volume, and muscles worked after every session.
+### 🧠 Smart Coaching & Analytics
+
+- **Recovery Intelligence:** Visual "Battery" indicators on every exercise card showing if a muscle is `[Recovering]` or `[Fresh]` based on your last 48h of training.
+- **Strength Trendlines:** Dynamic "Sparkline" graphs inside the logging modal that visualize your estimated 1RM momentum over the last 10 sessions.
+- **Ghost Inputs:** The app remembers your last set's weight and reps, pre-filling the inputs to reduce logging time to seconds.
+- **Smart Analytics:** Logic that automatically excludes sets tagged as `[Warm Up]` from your strength stats to ensure data accuracy.
+- **Physique Symmetry Analysis:** An intelligent "Push vs. Pull" ratio visualizer to detect muscle imbalances.
+
+### 🎮 Gamification (RPG System)
+
+- **Iron Ranks:** A lifetime volume tracker that levels you up from "Rust Recruit" 🥉 to "Titanium God" 💎 based on total tonnage lifted.
+- **Consistency Flame:** A "Weekly Streak" counter (🔥) that encourages habit building without punishing rest days.
+- **The Hall of Fame:** A dedicated trophy room displaying your all-time PRs for every exercise in a "Gold Card" format.
+- **Weekly Volume Vault:** A dynamic progress bar tracking total tonnage lifted per week.
+
+### 🛠️ Utilities & Customization
+
+- **"The Lab" (Custom Exercises):** Users can create custom movements, assign target muscles, and toggle "Bodyweight" logic (which hides the plate calculator).
+- **Home Gym Inventory:** Fully customizable Plate Calculator settings—users can define their bar weight and toggle available plates (e.g., for home gyms with limited weights).
 - **Muscle Heatmap:** Dynamic SVG visualization that highlights worked muscle groups based on recent activity.
-- **Interactive Plate Calculator:** Visual tool that automatically calculates and displays which plates to load on the bar.
-- **Time Machine History:** Interactive Consistency Calendar allowing users to tap past dates and view detailed summaries of previous workouts.
 - **Routine Builder:** CRUD functionality for creating and editing custom workout splits.
 
 ## 🛠 Tech Stack
@@ -25,6 +35,7 @@ https://github.com/user-attachments/assets/ed34540c-bf24-4428-89e6-64ab5b0062e5
 - **Frontend:** React Native (Expo), TypeScript
 - **Backend:** Supabase (PostgreSQL)
 - **Database Security:** Row Level Security (RLS) policies ensuring complete user data privacy.
+- **State/Storage:** `@react-native-async-storage/async-storage` (Local Preferences).
 - **Visualization:** `react-native-svg` (Custom implementation), `react-native-calendars`.
 - **UX/UI:** Haptic Feedback, Animated Confetti, Custom SVG Components.
 
