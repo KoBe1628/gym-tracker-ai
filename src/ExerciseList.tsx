@@ -102,7 +102,10 @@ export default function ExerciseList() {
   const [userPlates, setUserPlates] = useState([25, 20, 15, 10, 5, 2.5, 1.25]);
 
   // Ghost Input / Prefill
-  const [isGhost, setIsGhost] = useState(false); // 👻 Is this pre-filled data?
+  const [isGhost, setIsGhost] = useState(false); // Is this pre-filled data?
+
+  // Theme
+  const [primaryColor, setPrimaryColor] = useState("#bef264"); // THEME STATE
 
   useEffect(() => {
     loadInventorySettings();
@@ -114,8 +117,10 @@ export default function ExerciseList() {
     try {
       const bar = await AsyncStorage.getItem("barWeight");
       const plates = await AsyncStorage.getItem("availablePlates");
+      const color = await AsyncStorage.getItem("themeColor");
       if (bar) setUserBarWeight(parseFloat(bar));
       if (plates) setUserPlates(JSON.parse(plates));
+      if (color) setPrimaryColor(color);
     } catch (e) {}
   };
 
@@ -566,9 +571,11 @@ export default function ExerciseList() {
                     style={[
                       styles.startButton,
                       {
-                        backgroundColor: THEME.danger,
                         width: "100%",
                         alignItems: "center",
+                        backgroundColor: workoutId
+                          ? THEME.danger
+                          : primaryColor,
                       }, // Full width
                     ]}
                     onPress={finishWorkout}
@@ -664,7 +671,7 @@ export default function ExerciseList() {
         }}
         ListFooterComponent={
           <TouchableOpacity
-            style={styles.createButton}
+            style={[styles.createButton, { backgroundColor: primaryColor }]}
             onPress={() => setCreateModalVisible(true)}
           >
             <Ionicons
@@ -716,7 +723,7 @@ export default function ExerciseList() {
                 <Switch
                   value={isBodyweight}
                   onValueChange={setIsBodyweight}
-                  trackColor={{ false: "#333", true: THEME.primary }}
+                  trackColor={{ false: "#333", true: primaryColor }}
                   thumbColor={"white"}
                 />
               </View>
@@ -733,7 +740,10 @@ export default function ExerciseList() {
                     key={m.id}
                     style={[
                       styles.chip,
-                      newMuscleId === m.id && styles.activeChip,
+                      newMuscleId === m.id && {
+                        backgroundColor: primaryColor,
+                        borderColor: primaryColor,
+                      },
                     ]}
                     onPress={() => setNewMuscleId(m.id)}
                   >
@@ -788,10 +798,9 @@ export default function ExerciseList() {
                       marginTop: 4,
                     }}
                   >
-                    <Sparkline data={trendData} />
+                    <Sparkline data={trendData} color={primaryColor} />
                     <Text
                       style={{
-                        color: "#bef264",
                         fontSize: 10,
                         fontWeight: "bold",
                         marginLeft: 8,
@@ -814,7 +823,10 @@ export default function ExerciseList() {
 
             <View style={styles.tabContainer}>
               <TouchableOpacity
-                style={[styles.tab, activeTab === "log" && styles.activeTab]}
+                style={[
+                  styles.tab,
+                  activeTab === "log" && { backgroundColor: primaryColor },
+                ]}
                 onPress={() => setActiveTab("log")}
               >
                 <Text
@@ -830,7 +842,7 @@ export default function ExerciseList() {
               <TouchableOpacity
                 style={[
                   styles.tab,
-                  activeTab === "history" && styles.activeTab,
+                  activeTab === "history" && { backgroundColor: primaryColor },
                 ]}
                 onPress={() => setActiveTab("history")}
               >
@@ -1006,14 +1018,16 @@ export default function ExerciseList() {
         visible={showSummary}
         workoutId={workoutId}
         onClose={closeSummary}
+        themeColor={primaryColor}
       />
 
       <InventoryModal
         visible={showInventory}
         onClose={() => setShowInventory(false)}
-        onSave={(bar, plates) => {
+        onSave={(bar, plates, color) => {
           setUserBarWeight(bar);
           setUserPlates(plates);
+          setPrimaryColor(color);
         }}
       />
     </View>

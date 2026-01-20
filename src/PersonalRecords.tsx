@@ -29,9 +29,11 @@ const THEME = {
 export default function PersonalRecords({
   visible,
   onClose,
+  themeColor = "#bef264",
 }: {
   visible: boolean;
   onClose: () => void;
+  themeColor?: string;
 }) {
   const [records, setRecords] = useState<PR[]>([]);
   const [loading, setLoading] = useState(true);

@@ -13,13 +13,22 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Standard available plate types to toggle
+// 🎨 THEME PRESETS
+const THEME_COLORS = [
+  "#bef264", // Toxic Green (Original)
+  "#22d3ee", // Electric Cyan
+  "#f472b6", // Hot Pink
+  "#a78bfa", // Neon Purple
+  "#fb923c", // Solar Orange
+  "#ef4444", // High-Voltage Red
+];
+
 const ALL_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25, 0.5, 0.25];
 
 interface InventoryModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (barWeight: number, plates: number[]) => void;
+  onSave: (barWeight: number, plates: number[], newColor: string) => void;
 }
 
 export default function InventoryModal({
@@ -29,6 +38,7 @@ export default function InventoryModal({
 }: InventoryModalProps) {
   const [barWeight, setBarWeight] = useState("20");
   const [selectedPlates, setSelectedPlates] = useState<number[]>(ALL_PLATES);
+  const [selectedColor, setSelectedColor] = useState(THEME_COLORS[0]);
 
   useEffect(() => {
     if (visible) loadSettings();
@@ -38,11 +48,13 @@ export default function InventoryModal({
     try {
       const storedBar = await AsyncStorage.getItem("barWeight");
       const storedPlates = await AsyncStorage.getItem("availablePlates");
+      const storedColor = await AsyncStorage.getItem("themeColor");
 
       if (storedBar) setBarWeight(storedBar);
       if (storedPlates) setSelectedPlates(JSON.parse(storedPlates));
+      if (storedColor) setSelectedColor(storedColor);
     } catch (e) {
-      console.error("Failed to load inventory");
+      console.error("Failed to load settings");
     }
   };
 
@@ -56,13 +68,13 @@ export default function InventoryModal({
 
   const handleSave = async () => {
     const weight = parseFloat(barWeight) || 20;
-    // Ensure plates are sorted descending for the math logic later
     const sortedPlates = selectedPlates.sort((a, b) => b - a);
 
     await AsyncStorage.setItem("barWeight", weight.toString());
     await AsyncStorage.setItem("availablePlates", JSON.stringify(sortedPlates));
+    await AsyncStorage.setItem("themeColor", selectedColor);
 
-    onSave(weight, sortedPlates);
+    onSave(weight, sortedPlates, selectedColor);
     onClose();
   };
 
@@ -74,7 +86,7 @@ export default function InventoryModal({
       >
         <View style={styles.modalView}>
           <View style={styles.header}>
-            <Text style={styles.title}>GYM INVENTORY ⚙️</Text>
+            <Text style={styles.title}>GYM SETTINGS ⚙️</Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close-circle" size={28} color="#666" />
             </TouchableOpacity>
@@ -82,7 +94,9 @@ export default function InventoryModal({
 
           <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
             {/* 1. Barbell Weight */}
-            <Text style={styles.label}>BARBELL WEIGHT (KG)</Text>
+            <Text style={[styles.label, { color: selectedColor }]}>
+              BARBELL WEIGHT (KG)
+            </Text>
             <TextInput
               style={styles.input}
               keyboardType="numeric"
@@ -93,7 +107,9 @@ export default function InventoryModal({
             />
 
             {/* 2. Plate Toggles */}
-            <Text style={styles.label}>AVAILABLE PLATES</Text>
+            <Text style={[styles.label, { color: selectedColor }]}>
+              AVAILABLE PLATES
+            </Text>
             <View style={styles.grid}>
               {ALL_PLATES.map((plate) => {
                 const isActive = selectedPlates.includes(plate);
@@ -102,7 +118,12 @@ export default function InventoryModal({
                     key={plate}
                     style={[
                       styles.plateBtn,
-                      isActive ? styles.plateActive : styles.plateInactive,
+                      isActive
+                        ? {
+                            backgroundColor: selectedColor,
+                            borderColor: selectedColor,
+                          }
+                        : styles.plateInactive,
                     ]}
                     onPress={() => togglePlate(plate)}
                   >
@@ -114,20 +135,33 @@ export default function InventoryModal({
                     >
                       {plate}kg
                     </Text>
-                    {isActive && (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={16}
-                        color="black"
-                        style={{ position: "absolute", top: -5, right: -5 }}
-                      />
-                    )}
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+            {/* 3. 🎨 THEME STUDIO */}
+            <Text style={[styles.label, { color: selectedColor }]}>
+              APP THEME COLOR
+            </Text>
+            <View style={styles.colorGrid}>
+              {THEME_COLORS.map((color) => (
+                <TouchableOpacity
+                  key={color}
+                  style={[
+                    styles.colorCircle,
+                    { backgroundColor: color },
+                    selectedColor === color && styles.colorSelected,
+                  ]}
+                  onPress={() => setSelectedColor(color)}
+                />
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.saveBtn, { backgroundColor: selectedColor }]}
+              onPress={handleSave}
+            >
               <Text style={styles.saveText}>SAVE SETTINGS</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -148,7 +182,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 25,
-    maxHeight: "80%",
+    maxHeight: "85%",
   },
   header: {
     flexDirection: "row",
@@ -163,7 +197,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   label: {
-    color: "#bef264",
     fontSize: 12,
     fontWeight: "bold",
     marginTop: 10,
@@ -195,22 +228,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  plateActive: {
-    backgroundColor: "#bef264",
-    borderColor: "#bef264",
-  },
   plateInactive: {
     backgroundColor: "transparent",
     borderColor: "#444",
   },
   plateText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
   },
   textActive: { color: "black" },
   textInactive: { color: "#666" },
+
+  // Color Grid
+  colorGrid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 30,
+  },
+  colorCircle: {
+    width: 45,
+    height: 45,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: "#333",
+  },
+  colorSelected: { borderColor: "white", borderWidth: 3 },
+
   saveBtn: {
-    backgroundColor: "#bef264",
     padding: 16,
     borderRadius: 12,
     alignItems: "center",

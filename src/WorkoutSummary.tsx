@@ -15,10 +15,12 @@ export default function WorkoutSummary({
   visible,
   workoutId,
   onClose,
+  themeColor = "#bef264", // 🆕 Add Prop with default
 }: {
   visible: boolean;
   workoutId: number | null;
   onClose: () => void;
+  themeColor?: string; // 🆕 Type definition
 }) {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({

@@ -2,7 +2,13 @@ import React from "react";
 import { View } from "react-native";
 import Svg, { Polyline } from "react-native-svg";
 
-export default function Sparkline({ data = [] }: { data: number[] }) {
+export default function Sparkline({
+  data = [],
+  color = "#bef264",
+}: {
+  data: number[];
+  color?: string;
+}) {
   if (!data || data.length < 2) return null;
 
   const width = 80;
