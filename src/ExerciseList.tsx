@@ -22,7 +22,7 @@ import ProgressChart from "./ProgressChart";
 import RestTimer from "./RestTimer";
 import WeeklyTarget from "./WeeklyTarget";
 import WorkoutSummary from "./WorkoutSummary";
-import Sparkline from "./Sparkline"; // 📈 NEW IMPORT
+import Sparkline from "./Sparkline";
 import { feedback } from "./lib/haptics";
 import PlateCalculator from "./PlateCalculator";
 import ConfettiCannon from "react-native-confetti-cannon";
@@ -45,7 +45,7 @@ type Muscle = {
   name: string;
 };
 
-// 🎨 THEME
+// 🎨 THEME (Static Fallback)
 const THEME = {
   bg: "#121212",
   card: "#1E1E1E",
@@ -82,7 +82,7 @@ export default function ExerciseList() {
   // 🏆 PR & Recovery Logic
   const [currentPR, setCurrentPR] = useState(0);
   const [recoveryMap, setRecoveryMap] = useState<Record<number, string>>({});
-  const [trendData, setTrendData] = useState<number[]>([]); // 📈 TREND STATE
+  const [trendData, setTrendData] = useState<number[]>([]);
 
   // ⚙️ Logic State
   const [activeRoutineId, setActiveRoutineId] = useState<number | null>(null);
@@ -102,10 +102,10 @@ export default function ExerciseList() {
   const [userPlates, setUserPlates] = useState([25, 20, 15, 10, 5, 2.5, 1.25]);
 
   // Ghost Input / Prefill
-  const [isGhost, setIsGhost] = useState(false); // Is this pre-filled data?
+  const [isGhost, setIsGhost] = useState(false);
 
-  // Theme
-  const [primaryColor, setPrimaryColor] = useState("#bef264"); // THEME STATE
+  // 🎨 THEME STATE
+  const [primaryColor, setPrimaryColor] = useState("#bef264");
 
   useEffect(() => {
     loadInventorySettings();
@@ -226,37 +226,33 @@ export default function ExerciseList() {
     else setCurrentPR(0);
   }
 
-  // 📈 FETCH TREND DATA (Now Smarter 🧠)
+  // 📈 FETCH TREND DATA
   async function fetchTrendData(exerciseId: number) {
     const { data } = await supabase
       .from("workout_logs")
-      .select("weight_kg, reps, created_at, tags") // 👈 Make sure to fetch 'tags'
+      .select("weight_kg, reps, created_at, tags")
       .eq("exercise_id", exerciseId)
       .order("created_at", { ascending: false })
-      .limit(20); // Fetch more items initially, then filter
+      .limit(20);
 
     if (data && data.length > 0) {
-      // 1. FILTER OUT WARM UPS
       const cleanLogs = data.filter((log: any) => {
-        // If tags exist, check if 'Warm Up' is NOT present
         if (log.tags && Array.isArray(log.tags)) {
           return !log.tags.includes("Warm Up");
         }
-        return true; // Keep logs with no tags
+        return true;
       });
 
-      // 2. Take the top 10 *valid* logs
       const recentValidLogs = cleanLogs.slice(0, 10);
 
-      // 3. Calculate 1RM
       const oneRMs = recentValidLogs.map((log: any) => {
         const w = log.weight_kg || 0;
         const r = log.reps || 0;
         if (r === 0) return 0;
-        return w * (1 + r / 30); // Epley Formula
+        return w * (1 + r / 30);
       });
 
-      setTrendData(oneRMs.reverse()); // Oldest -> Newest
+      setTrendData(oneRMs.reverse());
     } else {
       setTrendData([]);
     }
@@ -353,20 +349,20 @@ export default function ExerciseList() {
     startWorkout();
   }
 
-  // 👻 GHOST LOGIC: Fetch last set
+  // 👻 GHOST LOGIC
   async function fetchLastSet(exerciseId: number) {
     const { data } = await supabase
       .from("workout_logs")
       .select("weight_kg, reps")
       .eq("exercise_id", exerciseId)
-      .order("created_at", { ascending: false }) // Newest first
+      .order("created_at", { ascending: false })
       .limit(1)
       .single();
 
     if (data) {
       setWeight(data.weight_kg.toString());
       setReps(data.reps.toString());
-      setIsGhost(true); // Tell UI this is a ghost value
+      setIsGhost(true);
     } else {
       setIsGhost(false);
     }
@@ -378,26 +374,20 @@ export default function ExerciseList() {
       return;
     }
     setSelectedExercise(exercise);
-
-    // 1. Reset everything first
     setWeight("");
     setReps("");
     setNote("");
     setTags([]);
-    setIsGhost(false); // Reset ghost status
-
+    setIsGhost(false);
     setActiveTab("log");
 
-    // 2. Fetch Context Data
     setCurrentPR(0);
     fetchPersonalRecord(exercise.id);
 
     setTrendData([]);
     fetchTrendData(exercise.id);
 
-    // 3. 👻 Summon the Ghost (Pre-fill inputs)
     fetchLastSet(exercise.id);
-
     setModalVisible(true);
   }
 
@@ -437,7 +427,7 @@ export default function ExerciseList() {
       setModalVisible(false);
       setShowTimer(true);
       fetchRecoveryStatus();
-      fetchTrendData(selectedExercise!.id); // Update trend immediately
+      fetchTrendData(selectedExercise!.id);
     } else {
       Alert.alert("Error", error.message);
     }
@@ -529,7 +519,7 @@ export default function ExerciseList() {
                 </TouchableOpacity>
               </View>
             ) : (
-              /* 🟢 UPDATED HEADER LAYOUT */
+              /* 🟢 HEADER LAYOUT */
               <View>
                 {/* ROW 1: Title & Icons */}
                 <View
@@ -537,7 +527,7 @@ export default function ExerciseList() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginBottom: 15, // Add space between title and button
+                    marginBottom: 15,
                     marginTop: 10,
                   }}
                 >
@@ -561,7 +551,7 @@ export default function ExerciseList() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* 🔥 STREAK (Pushed to the right) */}
+                  {/* 🔥 STREAK */}
                   <StreakCounter />
                 </View>
 
@@ -573,10 +563,8 @@ export default function ExerciseList() {
                       {
                         width: "100%",
                         alignItems: "center",
-                        backgroundColor: workoutId
-                          ? THEME.danger
-                          : primaryColor,
-                      }, // Full width
+                        backgroundColor: THEME.danger, // Danger is always red
+                      },
                     ]}
                     onPress={finishWorkout}
                   >
@@ -593,7 +581,11 @@ export default function ExerciseList() {
                   <TouchableOpacity
                     style={[
                       styles.startButton,
-                      { width: "100%", alignItems: "center" }, // Full width
+                      {
+                        width: "100%",
+                        alignItems: "center",
+                        backgroundColor: primaryColor,
+                      }, // 👈 FIXED: Uses dynamic color
                     ]}
                     onPress={startWorkout}
                   >
@@ -653,7 +645,7 @@ export default function ExerciseList() {
                     backgroundColor: isEditingRoutine
                       ? "#3b82f6"
                       : workoutId
-                      ? THEME.primary
+                      ? primaryColor // 👈 DYNAMIC COLOR
                       : "#333",
                   },
                 ]}
@@ -671,7 +663,7 @@ export default function ExerciseList() {
         }}
         ListFooterComponent={
           <TouchableOpacity
-            style={[styles.createButton, { backgroundColor: primaryColor }]}
+            style={[styles.createButton, { backgroundColor: primaryColor }]} // 👈 DYNAMIC COLOR
             onPress={() => setCreateModalVisible(true)}
           >
             <Ionicons
@@ -760,7 +752,7 @@ export default function ExerciseList() {
               </ScrollView>
 
               <TouchableOpacity
-                style={styles.saveButton}
+                style={[styles.saveButton, { backgroundColor: primaryColor }]} // 👈 DYNAMIC COLOR
                 onPress={createExercise}
               >
                 <Text style={styles.saveButtonText}>CREATE EXERCISE</Text>
@@ -804,6 +796,7 @@ export default function ExerciseList() {
                         fontSize: 10,
                         fontWeight: "bold",
                         marginLeft: 8,
+                        color: primaryColor, // 👈 DYNAMIC COLOR
                       }}
                     >
                       TREND
@@ -864,6 +857,34 @@ export default function ExerciseList() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
               >
+                {/* 👻 GHOST INDICATOR */}
+                {isGhost && (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "center",
+                      marginBottom: 5,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Ionicons
+                      name="return-down-forward"
+                      size={12}
+                      color={primaryColor}
+                    />
+                    <Text
+                      style={{
+                        color: primaryColor,
+                        fontSize: 10,
+                        fontWeight: "bold",
+                        marginLeft: 4,
+                      }}
+                    >
+                      PRE-FILLED FROM LAST SESSION
+                    </Text>
+                  </View>
+                )}
+
                 <View style={styles.inputRow}>
                   <TextInput
                     placeholder={
@@ -872,25 +893,45 @@ export default function ExerciseList() {
                     placeholderTextColor="#666"
                     keyboardType="numeric"
                     returnKeyType="done"
-                    style={styles.input}
+                    style={[
+                      styles.input,
+                      isGhost && {
+                        borderColor: primaryColor,
+                        color: primaryColor,
+                      },
+                    ]} // 👈 DYNAMIC
                     value={weight}
-                    onChangeText={setWeight}
+                    onChangeText={(t) => {
+                      setWeight(t);
+                      setIsGhost(false);
+                    }}
                   />
                   <TextInput
                     placeholder="Reps"
                     placeholderTextColor="#666"
                     keyboardType="numeric"
                     returnKeyType="done"
-                    style={styles.input}
+                    style={[
+                      styles.input,
+                      isGhost && {
+                        borderColor: primaryColor,
+                        color: primaryColor,
+                      },
+                    ]} // 👈 DYNAMIC
                     value={reps}
-                    onChangeText={setReps}
+                    onChangeText={(t) => {
+                      setReps(t);
+                      setIsGhost(false);
+                    }}
                   />
                 </View>
 
                 <View style={styles.statsRow}>
                   {weight && reps ? (
                     <View style={styles.statChip}>
-                      <Text style={styles.statLabel}>EST. 1RM</Text>
+                      <Text style={[styles.statLabel, { color: primaryColor }]}>
+                        EST. 1RM
+                      </Text>
                       <Text style={styles.statValue}>{estimatedMax}kg</Text>
                     </View>
                   ) : null}
@@ -982,7 +1023,10 @@ export default function ExerciseList() {
                   />
                 </View>
 
-                <TouchableOpacity style={styles.saveButton} onPress={logSet}>
+                <TouchableOpacity
+                  style={[styles.saveButton, { backgroundColor: primaryColor }]} // 👈 DYNAMIC COLOR
+                  onPress={logSet}
+                >
                   <Text style={styles.saveButtonText}>LOG SET</Text>
                 </TouchableOpacity>
               </ScrollView>
@@ -1010,7 +1054,7 @@ export default function ExerciseList() {
           origin={{ x: -10, y: 0 }}
           autoStart={true}
           fadeOut={true}
-          colors={["#FFD700", "#FFA500", "#FFFFFF", "#bef264"]}
+          colors={["#FFD700", "#FFA500", "#FFFFFF", primaryColor]}
         />
       )}
 
