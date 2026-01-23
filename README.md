@@ -25,6 +25,7 @@ https://github.com/user-attachments/assets/ed34540c-bf24-4428-89e6-64ab5b0062e5
 
 ### 🛠️ Utilities & Customization
 
+- **Theme Studio:** A built-in personalization engine allowing users to toggle the app's accent color (e.g., Toxic Green, Electric Cyan, Hot Pink) to match their vibe.
 - **"The Lab" (Custom Exercises):** Users can create custom movements, assign target muscles, and toggle "Bodyweight" logic (which hides the plate calculator).
 - **Home Gym Inventory:** Fully customizable Plate Calculator settings—users can define their bar weight and toggle available plates (e.g., for home gyms with limited weights).
 - **Muscle Heatmap:** Dynamic SVG visualization that highlights worked muscle groups based on recent activity.
