@@ -2,8 +2,6 @@
 
 A smart fitness companion built with **React Native** and **Supabase** that tracks progress, visualizes muscle engagement, and analyzes strength trends with RPG-style gamification.
 
-![App Demo]
-
 https://github.com/user-attachments/assets/ed34540c-bf24-4428-89e6-64ab5b0062e5
 
 ## 🚀 Key Features
