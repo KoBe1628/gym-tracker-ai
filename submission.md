@@ -1,6 +1,6 @@
 # Project: Gym Tracker AI
 
-**Repo:** [Link to your GitHub Repo]
+**Repo:** [https://github.com/KoBe1628/gym-tracker-ai]
 **Tech Stack:** React Native (Expo), Supabase, TypeScript, AI-Assisted Workflow
 
 ---
