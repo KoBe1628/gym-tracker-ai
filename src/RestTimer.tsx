@@ -30,7 +30,19 @@ export default function RestTimer({
 
       setTimeLeft((prev) => {
         if (prev <= 0) return 0;
-        return prev - 1;
+        const next = prev - 1;
+
+        if (next === 0) {
+          void Haptics.notificationAsync(
+            Haptics.NotificationFeedbackType.Success,
+          );
+        } else if (next <= 3) {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        } else {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+
+        return next;
       });
     }, 1000);
 
@@ -61,7 +73,6 @@ export default function RestTimer({
   }
 
   function finishTimer() {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onClose(); // Safe to call here!
   }
 

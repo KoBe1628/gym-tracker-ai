@@ -7,11 +7,14 @@ import { Ionicons } from "@expo/vector-icons"; // Icons for the tab bar
 // SCREENS
 import Auth from "./src/Auth";
 import ExerciseList from "./src/ExerciseList";
+import Analytics from "./src/Analytics";
 import Profile from "./src/Profile";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
-  const [currentTab, setCurrentTab] = useState<"home" | "profile">("home"); // Simple state navigation
+  const [currentTab, setCurrentTab] = useState<
+    "home" | "analytics" | "profile"
+  >("home"); // Simple state navigation
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -43,7 +46,13 @@ export default function App() {
     <View style={styles.container}>
       {/* MAIN CONTENT AREA */}
       <View style={styles.content}>
-        {currentTab === "home" ? <ExerciseList /> : <Profile />}
+        {currentTab === "home" ? (
+          <ExerciseList />
+        ) : currentTab === "analytics" ? (
+          <Analytics />
+        ) : (
+          <Profile />
+        )}
       </View>
 
       {/* CUSTOM BOTTOM TAB BAR */}
@@ -65,6 +74,28 @@ export default function App() {
             }}
           >
             WORKOUT
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => setCurrentTab("analytics")}
+        >
+          <Ionicons
+            name={
+              currentTab === "analytics" ? "stats-chart" : "stats-chart-outline"
+            }
+            size={28}
+            color={currentTab === "analytics" ? "#bef264" : "#666"}
+          />
+          <Text
+            style={{
+              color: currentTab === "analytics" ? "#bef264" : "#666",
+              fontSize: 10,
+              fontWeight: "bold",
+            }}
+          >
+            ANALYTICS
           </Text>
         </TouchableOpacity>
 

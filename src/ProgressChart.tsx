@@ -5,7 +5,10 @@ import {
   Text,
   Dimensions,
   ActivityIndicator,
+  Alert,
+  TouchableOpacity,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { LineChart } from "react-native-gifted-charts"; // Or your custom SVG if you stuck with that
 import { supabase } from "./lib/supabase";
 import Svg, { Polyline, Circle, Line, Text as SvgText } from "react-native-svg"; // Custom SVG imports
@@ -24,6 +27,7 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
   const [rawLogs, setRawLogs] = useState<any[]>([]); // 📝 Store full DB rows here
   const [chartData, setChartData] = useState<any[]>([]); // 📈 Store formatted points here
   const [loading, setLoading] = useState(true);
+  const hasRecentSet = rawLogs.length > 0;
 
   useEffect(() => {
     fetchHistory();
@@ -130,6 +134,28 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
     );
   };
 
+  async function handleUndoLast() {
+    const mostRecentLog = rawLogs[0];
+    if (!mostRecentLog?.id) return;
+
+    try {
+      const { error } = await supabase
+        .from("workout_logs")
+        .delete()
+        .eq("id", mostRecentLog.id);
+
+      if (error) {
+        console.error("Failed to undo last set", error);
+        return;
+      }
+
+      setRawLogs((prev) => prev.filter((log) => log.id !== mostRecentLog.id));
+      setChartData((prev) => prev.slice(0, -1));
+    } catch (error) {
+      console.error("Unexpected undo error", error);
+    }
+  }
+
   return (
     <View style={styles.container}>
       <View
@@ -141,10 +167,21 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
         }}
       >
         <Text style={styles.title}>STRENGTH CURVE 📈</Text>
-        {/* Simple "Undo" placeholder - logic is in parent or add callback here */}
-        <Text style={{ color: THEME.danger, fontSize: 10, fontWeight: "bold" }}>
-          UNDO LAST
-        </Text>
+        <TouchableOpacity
+          onPress={handleUndoLast}
+          disabled={!hasRecentSet}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={[
+            styles.undoButton,
+            !hasRecentSet && styles.undoButtonDisabled,
+          ]}
+        >
+          <Text
+            style={[styles.undoText, !hasRecentSet && styles.undoTextDisabled]}
+          >
+            UNDO LAST
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -168,19 +205,19 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
         </Text>
 
         {/* 🔄 CHANGED: Removed .slice(0, 3) so it shows EVERYTHING */}
-        {rawLogs.map((log: any, index: number) => (
+        {rawLogs.map((item: any, index: number) => (
           <View key={index} style={styles.logRow}>
             <View style={{ flex: 1 }}>
               <Text
                 style={{ color: "white", fontWeight: "bold", fontSize: 12 }}
               >
-                {new Date(log.created_at).toLocaleDateString()}
+                {new Date(item.created_at).toLocaleDateString()}
               </Text>
 
               {/* TAG BADGES */}
-              {log.tags && log.tags.length > 0 && (
+              {item.tags && item.tags.length > 0 && (
                 <View style={{ flexDirection: "row", gap: 5, marginTop: 4 }}>
-                  {log.tags.map((t: string) => {
+                  {item.tags.map((t: string) => {
                     let color = "#444";
                     if (t === "Warm Up") color = "#eab308";
                     if (t === "Failure") color = "#ef4444";
@@ -212,19 +249,60 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
               )}
 
               {/* Note */}
-              {log.note ? (
-                <Text style={styles.noteText}>"{log.note}"</Text>
+              {item.note ? (
+                <Text style={styles.noteText}>"{item.note}"</Text>
               ) : null}
             </View>
 
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={{ color: "white", fontWeight: "bold" }}>
-                {log.weight_kg}{" "}
-                <Text style={{ fontSize: 10, color: "#666" }}>kg</Text>
-              </Text>
-              <Text style={{ color: "#666", fontSize: 10 }}>
-                {log.reps} reps
-              </Text>
+            <View style={styles.rowActions}>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={{ color: "white", fontWeight: "bold" }}>
+                  {item.weight_kg}{" "}
+                  <Text style={{ fontSize: 10, color: "#666" }}>kg</Text>
+                </Text>
+                <Text style={{ color: "#666", fontSize: 10 }}>
+                  {item.reps} reps
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() =>
+                  Alert.alert("Manage Set", "", [
+                    {
+                      text: "Delete",
+                      style: "destructive",
+                      onPress: async () => {
+                        try {
+                          const { error } = await supabase
+                            .from("workout_logs")
+                            .delete()
+                            .eq("id", item.id);
+
+                          if (error) {
+                            console.error("Failed to delete set", error);
+                            return;
+                          }
+
+                          setRawLogs((prev) =>
+                            prev.filter((log) => log.id !== item.id),
+                          );
+                        } catch (error) {
+                          console.error("Unexpected delete error", error);
+                        }
+                      },
+                    },
+                    { text: "Cancel", style: "cancel" },
+                  ])
+                }
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name="ellipsis-vertical"
+                  size={14}
+                  color="#666"
+                  style={styles.rowActionIcon}
+                />
+              </TouchableOpacity>
             </View>
           </View>
         ))}
@@ -247,12 +325,36 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     letterSpacing: 1,
   },
+  undoButton: {
+    zIndex: 10,
+  },
+  undoButtonDisabled: {
+    opacity: 0.5,
+  },
+  undoText: {
+    color: THEME.danger,
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+  undoTextDisabled: {
+    color: "#666",
+  },
   logRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: "#333",
     paddingVertical: 12,
+  },
+  rowActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginLeft: 12,
+  },
+  rowActionIcon: {
+    opacity: 0.6,
   },
   noteText: {
     color: THEME.primary,
