@@ -64,7 +64,7 @@ export default function ExerciseList() {
   const [workoutId, setWorkoutId] = useState<number | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(
-    null
+    null,
   );
 
   // 📝 Inputs
@@ -149,7 +149,7 @@ export default function ExerciseList() {
     const { data: logs } = await supabase
       .from("workout_logs")
       .select(
-        `created_at, exercises!inner(muscles(id)), workouts!inner(user_id)`
+        `created_at, exercises!inner(muscles(id)), workouts!inner(user_id)`,
       )
       .eq("workouts.user_id", user.id)
       .gte("created_at", twoDaysAgo.toISOString())
@@ -262,7 +262,7 @@ export default function ExerciseList() {
     if (!newName || !newMuscleId)
       return Alert.alert(
         "Missing Info",
-        "Please add a name and pick a muscle."
+        "Please add a name and pick a muscle.",
       );
     const {
       data: { user },
@@ -415,7 +415,7 @@ export default function ExerciseList() {
         setShowConfetti(true);
         Alert.alert(
           "🏆 NEW RECORD!",
-          `You just crushed your old PR of ${currentPR}kg!`
+          `You just crushed your old PR of ${currentPR}kg!`,
         );
         setCurrentPR(inputWeight);
       } else if (inputWeight >= 100 || parseInt(reps) >= 12) {
@@ -496,7 +496,7 @@ export default function ExerciseList() {
                 setActiveRoutineName(name);
                 Alert.alert(
                   "Editing " + name,
-                  "Tap bookmark to add exercises."
+                  "Tap bookmark to add exercises.",
                 );
               }}
             />
@@ -645,8 +645,8 @@ export default function ExerciseList() {
                     backgroundColor: isEditingRoutine
                       ? "#3b82f6"
                       : workoutId
-                      ? primaryColor // 👈 DYNAMIC COLOR
-                      : "#333",
+                        ? primaryColor // 👈 DYNAMIC COLOR
+                        : "#333",
                   },
                 ]}
               >

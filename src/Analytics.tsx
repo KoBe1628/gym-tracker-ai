@@ -6,6 +6,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "./lib/supabase";
 
 type AnalyticsRow = {
@@ -104,6 +105,18 @@ export default function Analytics() {
 
     fetchAnalytics();
   }, []);
+  if (!isLoading && data.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="clipboard-outline" size={56} color="#666" />
+          <Text style={styles.emptyText}>
+            No workout data yet. Log a workout to see your strength standards!
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -223,6 +236,18 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0.8,
     textTransform: "uppercase",
+    textAlign: "center",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 30,
+    backgroundColor: "#121212",
+  },
+  emptyText: {
+    color: "#888",
+    marginTop: 12,
     textAlign: "center",
   },
 });
