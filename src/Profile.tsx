@@ -44,7 +44,7 @@ export default function Profile() {
   const [showPRs, setShowPRs] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedWorkoutId, setSelectedWorkoutId] = useState<number | null>(
-    null
+    null,
   );
   // We need a map to quickly find the workout ID when a date is tapped
   const [workoutMap, setWorkoutMap] = useState<Record<string, number>>({});
@@ -74,7 +74,7 @@ export default function Profile() {
         setBodyweight(
           profile.bodyweight !== null && profile.bodyweight !== undefined
             ? String(profile.bodyweight)
-            : ""
+            : "",
         );
       }
 
@@ -324,7 +324,10 @@ export default function Profile() {
               keyboardType="numeric"
               returnKeyType="done"
             />
-            <TouchableOpacity style={styles.saveButton} onPress={saveBodyweight}>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={saveBodyweight}
+            >
               <Text style={styles.saveButtonText}>Save</Text>
             </TouchableOpacity>
           </View>
