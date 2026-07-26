@@ -7,6 +7,7 @@ import {
   Alert,
   Switch,
   ScrollView,
+  TextInput,
 } from "react-native";
 import { supabase } from "./lib/supabase";
 import { Calendar } from "react-native-calendars"; // 🗓️ The new library
@@ -33,6 +34,7 @@ export default function Profile() {
   const [level, setLevel] = useState("Beginner");
   const [workoutCount, setWorkoutCount] = useState(0);
   const [joinDate, setJoinDate] = useState("");
+  const [bodyweight, setBodyweight] = useState("");
   const [markedDates, setMarkedDates] = useState<any>({}); // 🗓️ Holds our colored days
   const [badgeStats, setBadgeStats] = useState({
     count: 0,
@@ -62,13 +64,18 @@ export default function Profile() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("experience_level, created_at")
+        .select("experience_level, created_at, bodyweight")
         .eq("id", user.id)
         .single();
 
       if (profile) {
         setLevel(profile.experience_level || "Beginner");
         setJoinDate(new Date(profile.created_at).toLocaleDateString());
+        setBodyweight(
+          profile.bodyweight !== null && profile.bodyweight !== undefined
+            ? String(profile.bodyweight)
+            : ""
+        );
       }
 
       // 1. Fetch Workouts (Existing code)
@@ -148,6 +155,39 @@ export default function Profile() {
         .update({ experience_level: newLevel })
         .eq("id", user.id);
     }
+  }
+
+  async function saveBodyweight() {
+    const parsedBodyweight = Number(bodyweight);
+
+    if (
+      !bodyweight.trim() ||
+      Number.isNaN(parsedBodyweight) ||
+      parsedBodyweight <= 0
+    ) {
+      Alert.alert("Invalid weight", "Enter a valid bodyweight in kg.");
+      return;
+    }
+
+    feedback.medium();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ bodyweight: parsedBodyweight })
+      .eq("id", user.id);
+
+    if (error) {
+      Alert.alert("Error", error.message);
+      return;
+    }
+
+    Alert.alert("Saved", "Your bodyweight was updated.");
   }
 
   async function signOut() {
@@ -269,6 +309,27 @@ export default function Profile() {
           />
         </View>
 
+        <View style={styles.bodyweightCard}>
+          <Text style={styles.settingLabel}>Bodyweight</Text>
+          <Text style={styles.settingSub}>
+            Used for strength standard calculations.
+          </Text>
+          <View style={styles.bodyweightRow}>
+            <TextInput
+              style={styles.bodyweightInput}
+              value={bodyweight}
+              onChangeText={setBodyweight}
+              placeholder="Enter kg"
+              placeholderTextColor="#666"
+              keyboardType="numeric"
+              returnKeyType="done"
+            />
+            <TouchableOpacity style={styles.saveButton} onPress={saveBodyweight}>
+              <Text style={styles.saveButtonText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* FOOTER */}
         <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
           <Text style={styles.signOutText}>Sign Out</Text>
@@ -357,6 +418,44 @@ const styles = StyleSheet.create({
   },
   settingLabel: { color: "white", fontSize: 16, fontWeight: "bold" },
   settingSub: { color: THEME.textDim, fontSize: 12, marginTop: 4 },
+  bodyweightCard: {
+    backgroundColor: THEME.card,
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  bodyweightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 14,
+  },
+  bodyweightInput: {
+    flex: 1,
+    backgroundColor: "#111",
+    color: "white",
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  saveButton: {
+    backgroundColor: THEME.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saveButtonText: {
+    color: "black",
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
 
   // Buttons
   signOutBtn: {
