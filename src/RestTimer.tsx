@@ -1,9 +1,15 @@
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import {
+  AppState,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Notifications from "expo-notifications";
 import {
-  registerForPushNotificationsAsync,
   scheduleRestNotification,
   cancelRestNotification,
 } from "./lib/notifications";
@@ -20,11 +26,28 @@ export default function RestTimer({
 
   // Ref to prevent double-firing the finish logic
   const hasFinished = useRef(false);
+  const endTimeRef = useRef<number | null>(null);
+
+  async function startTimer() {
+    endTimeRef.current = Date.now() + initialSeconds * 1000;
+
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+
+      if (status === "granted") {
+        await scheduleRestNotification(initialSeconds);
+      }
+    } catch (e) {
+      console.log("Notification setup failed (Expected in Expo Go):", e);
+    }
+  }
 
   // 1. Setup & Teardown
   useEffect(() => {
-    setupNotifications();
+    void startTimer();
+  }, []);
 
+  useEffect(() => {
     const interval = setInterval(() => {
       if (!isActive) return;
 
@@ -52,6 +75,32 @@ export default function RestTimer({
     };
   }, [isActive]); // Re-run if pause/play changes
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (
+        !isActive ||
+        nextAppState !== "active" ||
+        endTimeRef.current === null
+      ) {
+        return;
+      }
+
+      const remainingMs = endTimeRef.current - Date.now();
+
+      if (remainingMs <= 0) {
+        endTimeRef.current = null;
+        setTimeLeft(0);
+        return;
+      }
+
+      setTimeLeft(Math.ceil(remainingMs / 1000));
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isActive]);
+
   // 2. Watcher: This fixes the "Cannot update component" error 🛡️
   useEffect(() => {
     if (timeLeft === 0 && !hasFinished.current) {
@@ -60,18 +109,6 @@ export default function RestTimer({
     }
   }, [timeLeft]);
 
-  async function setupNotifications() {
-    // Wrap in try-catch because Expo Go sometimes fails here
-    try {
-      const hasPermission = await registerForPushNotificationsAsync();
-      if (hasPermission) {
-        await scheduleRestNotification(initialSeconds);
-      }
-    } catch (e) {
-      console.log("Notification setup failed (Expected in Expo Go):", e);
-    }
-  }
-
   function finishTimer() {
     onClose(); // Safe to call here!
   }
@@ -79,6 +116,7 @@ export default function RestTimer({
   function addTime(seconds: number) {
     setTimeLeft((prev) => {
       const newTime = prev + seconds;
+      endTimeRef.current = Date.now() + newTime * 1000;
       scheduleRestNotification(newTime);
       return newTime;
     });
@@ -87,6 +125,7 @@ export default function RestTimer({
   function subtractTime(seconds: number) {
     setTimeLeft((prev) => {
       const newTime = Math.max(0, prev - seconds);
+      endTimeRef.current = newTime > 0 ? Date.now() + newTime * 1000 : null;
       scheduleRestNotification(newTime);
       return newTime;
     });

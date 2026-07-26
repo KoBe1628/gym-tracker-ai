@@ -5,6 +5,8 @@ import { Platform } from "react-native";
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -39,6 +41,7 @@ export async function scheduleRestNotification(seconds: number) {
       sound: true,
     },
     trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: seconds, // Schedule for X seconds from now
     },
   });
