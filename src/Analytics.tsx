@@ -264,7 +264,7 @@ export default function Analytics() {
         >
           <Text style={styles.title}>Strength Standards</Text>
           <Text style={styles.subtitle}>
-            Mock strength targets based on estimated one-rep max.
+            Strength targets based on estimated one-rep max.
           </Text>
 
           {trendSeries.chartData.length > 0 ? (
