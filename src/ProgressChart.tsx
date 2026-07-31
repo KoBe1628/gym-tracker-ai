@@ -6,6 +6,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  ActionSheetIOS,
   TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,7 +24,15 @@ const THEME = {
   danger: "#EF4444",
 };
 
-export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
+export default function ProgressChart({
+  exerciseId,
+  refreshKey,
+  onEditLog,
+}: {
+  exerciseId: number;
+  refreshKey?: number;
+  onEditLog?: (log: any) => void;
+}) {
   const [rawLogs, setRawLogs] = useState<any[]>([]); // 📝 Store full DB rows here
   const [chartData, setChartData] = useState<any[]>([]); // 📈 Store formatted points here
   const [loading, setLoading] = useState(true);
@@ -31,7 +40,7 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
 
   useEffect(() => {
     fetchHistory();
-  }, [exerciseId]);
+  }, [exerciseId, refreshKey]);
 
   async function fetchHistory() {
     // 1. Fetch RAW data (Include 'note', 'reps', 'created_at', 'tags')
@@ -266,8 +275,72 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
               </View>
 
               <TouchableOpacity
-                onPress={() =>
+                onPress={() => {
+                  const options = ["Edit", "Delete", "Cancel"];
+                  const destructiveButtonIndex = 1;
+                  const cancelButtonIndex = 2;
+
+                  if (ActionSheetIOS?.showActionSheetWithOptions) {
+                    ActionSheetIOS.showActionSheetWithOptions(
+                      {
+                        options,
+                        destructiveButtonIndex,
+                        cancelButtonIndex,
+                      },
+                      (buttonIndex) => {
+                        if (buttonIndex === 0) {
+                          console.log("Edit tapped", item);
+                          onEditLog?.(item);
+                          return;
+                        }
+
+                        if (buttonIndex === 1) {
+                          Alert.alert("Delete Set?", "This cannot be undone.", [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Delete",
+                              style: "destructive",
+                              onPress: async () => {
+                                try {
+                                  const { error } = await supabase
+                                    .from("workout_logs")
+                                    .delete()
+                                    .eq("id", item.id);
+
+                                  if (error) {
+                                    console.error(
+                                      "Failed to delete set",
+                                      error,
+                                    );
+                                    return;
+                                  }
+
+                                  setRawLogs((prev) =>
+                                    prev.filter((log) => log.id !== item.id),
+                                  );
+                                } catch (error) {
+                                  console.error(
+                                    "Unexpected delete error",
+                                    error,
+                                  );
+                                }
+                              },
+                            },
+                          ]);
+                        }
+                      },
+                    );
+                    return;
+                  }
+
                   Alert.alert("Manage Set", "", [
+                    {
+                      text: "Edit",
+                      onPress: () => {
+                        console.log("Edit tapped", item);
+                        onEditLog?.(item);
+                      },
+                    },
                     {
                       text: "Delete",
                       style: "destructive",
@@ -292,8 +365,8 @@ export default function ProgressChart({ exerciseId }: { exerciseId: number }) {
                       },
                     },
                     { text: "Cancel", style: "cancel" },
-                  ])
-                }
+                  ]);
+                }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Ionicons

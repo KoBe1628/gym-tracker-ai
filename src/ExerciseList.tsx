@@ -92,6 +92,10 @@ export default function ExerciseList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [editingLog, setEditingLog] = useState<any>(null);
+  const [editWeight, setEditWeight] = useState("");
+  const [editReps, setEditReps] = useState("");
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   // 🗂️ Tab State
   const [activeTab, setActiveTab] = useState<"log" | "history">("log");
@@ -106,6 +110,23 @@ export default function ExerciseList() {
 
   // 🎨 THEME STATE
   const [primaryColor, setPrimaryColor] = useState("#bef264");
+
+  useEffect(() => {
+    if (editingLog) {
+      setEditWeight(editingLog.weight_kg?.toString() ?? "");
+      setEditReps(editingLog.reps?.toString() ?? "");
+    } else {
+      setEditWeight("");
+      setEditReps("");
+    }
+  }, [editingLog]);
+
+  const handleEditLog = (log: any) => {
+    console.log("Parent received log:", log.id);
+    setEditingLog(log);
+    setEditWeight(String(log.weight_kg || ""));
+    setEditReps(String(log.reps || ""));
+  };
 
   useEffect(() => {
     loadInventorySettings();
@@ -256,6 +277,34 @@ export default function ExerciseList() {
     } else {
       setTrendData([]);
     }
+  }
+
+  async function saveEditedLog() {
+    if (!editingLog) return;
+
+    if (!editReps) {
+      return Alert.alert("Error", "Please enter reps.");
+    }
+
+    const parsedWeight = editWeight ? parseFloat(editWeight) : 0;
+    const parsedReps = parseInt(editReps, 10);
+
+    if (Number.isNaN(parsedWeight) || Number.isNaN(parsedReps)) {
+      return Alert.alert("Error", "Please enter valid numbers.");
+    }
+
+    const { error } = await supabase
+      .from("workout_logs")
+      .update({ weight_kg: parsedWeight, reps: parsedReps })
+      .eq("id", editingLog.id);
+
+    if (error) {
+      Alert.alert("Error", error.message);
+      return;
+    }
+
+    setEditingLog(null);
+    setHistoryRefreshKey((value) => value + 1);
   }
 
   async function createExercise() {
@@ -1036,9 +1085,61 @@ export default function ExerciseList() {
                 contentContainerStyle={{ paddingBottom: 50, paddingTop: 10 }}
               >
                 {selectedExercise && (
-                  <ProgressChart exerciseId={selectedExercise.id} />
+                  <ProgressChart
+                    exerciseId={selectedExercise.id}
+                    refreshKey={historyRefreshKey}
+                    onEditLog={handleEditLog}
+                  />
                 )}
               </ScrollView>
+            )}
+
+            {editingLog && (
+              <View style={styles.editModalOverlay}>
+                <View style={styles.editModalCard}>
+                  <Text style={styles.editModalTitle}>EDIT LOG</Text>
+                  <Text style={styles.editModalSubtitle}>
+                    Update the set you logged.
+                  </Text>
+
+                  <TextInput
+                    placeholder="Weight (kg)"
+                    placeholderTextColor="#666"
+                    keyboardType="numeric"
+                    style={styles.editModalInput}
+                    value={editWeight}
+                    onChangeText={setEditWeight}
+                  />
+
+                  <TextInput
+                    placeholder="Reps"
+                    placeholderTextColor="#666"
+                    keyboardType="numeric"
+                    style={styles.editModalInput}
+                    value={editReps}
+                    onChangeText={setEditReps}
+                  />
+
+                  <TouchableOpacity
+                    style={[
+                      styles.saveButton,
+                      { backgroundColor: primaryColor },
+                    ]}
+                    onPress={saveEditedLog}
+                  >
+                    <Text style={styles.saveButtonText}>SAVE</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setEditingLog(null)}
+                    style={{ alignItems: "center", paddingVertical: 8 }}
+                  >
+                    <Text style={{ color: "#888", fontWeight: "bold" }}>
+                      CANCEL
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             )}
           </View>
         </KeyboardAvoidingView>
@@ -1359,6 +1460,53 @@ const styles = StyleSheet.create({
     height: 50,
   },
   noteInput: { flex: 1, color: "white", height: "100%" },
+
+  editModalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    zIndex: 9999,
+    elevation: 9999,
+  },
+  editModalCard: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#1c1c1e",
+    borderRadius: 12,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
+  },
+  editModalTitle: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  editModalSubtitle: {
+    color: "#888",
+    fontSize: 12,
+    marginBottom: 16,
+  },
+  editModalInput: {
+    backgroundColor: "#111",
+    color: "white",
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    fontSize: 16,
+    textAlign: "center",
+  },
 
   saveButton: {
     backgroundColor: THEME.primary,
