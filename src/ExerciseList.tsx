@@ -259,7 +259,9 @@ export default function ExerciseList() {
     if (data && data.length > 0) {
       const cleanLogs = data.filter((log: any) => {
         if (log.tags && Array.isArray(log.tags)) {
-          return !log.tags.includes("Warm Up");
+          return !log.tags.some((tag: string) =>
+            ["Warm Up", "Failure", "Drop Set"].includes(tag),
+          );
         }
         return true;
       });
@@ -279,6 +281,18 @@ export default function ExerciseList() {
     }
   }
 
+  const validateSetData = (weightKg: number, repsValue: number) => {
+    if (repsValue < 1 || repsValue > 100) {
+      return "Reps must be between 1 and 100.";
+    }
+
+    if (weightKg < 0 || weightKg > 1200) {
+      return "Please enter a realistic weight.";
+    }
+
+    return null;
+  };
+
   async function saveEditedLog() {
     if (!editingLog) return;
 
@@ -291,6 +305,11 @@ export default function ExerciseList() {
 
     if (Number.isNaN(parsedWeight) || Number.isNaN(parsedReps)) {
       return Alert.alert("Error", "Please enter valid numbers.");
+    }
+
+    const validationError = validateSetData(parsedWeight, parsedReps);
+    if (validationError) {
+      return Alert.alert("Invalid Data", validationError);
     }
 
     const { error } = await supabase
@@ -444,6 +463,17 @@ export default function ExerciseList() {
     if ((!weight && !selectedExercise?.is_bodyweight) || !reps)
       return Alert.alert("Error", "Enter data");
     const inputWeight = weight ? parseFloat(weight) : 0;
+    const inputReps = parseInt(reps, 10);
+
+    if (Number.isNaN(inputWeight) || Number.isNaN(inputReps)) {
+      return Alert.alert("Error", "Please enter valid numbers.");
+    }
+
+    const validationError = validateSetData(inputWeight, inputReps);
+    if (validationError) {
+      return Alert.alert("Invalid Data", validationError);
+    }
+
     const isNewRecord = currentPR > 0 && inputWeight > currentPR;
 
     const { error } = await supabase.from("workout_logs").insert([
@@ -451,7 +481,7 @@ export default function ExerciseList() {
         workout_id: workoutId,
         exercise_id: selectedExercise?.id,
         weight_kg: inputWeight,
-        reps: parseInt(reps),
+        reps: inputReps,
         note: note.trim(),
         tags: tags,
       },
@@ -467,7 +497,7 @@ export default function ExerciseList() {
           `You just crushed your old PR of ${currentPR}kg!`,
         );
         setCurrentPR(inputWeight);
-      } else if (inputWeight >= 100 || parseInt(reps) >= 12) {
+      } else if (inputWeight >= 100 || inputReps >= 12) {
         setShowConfetti(true);
       }
       if (showConfetti || isNewRecord)
